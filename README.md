@@ -41,6 +41,13 @@ npm install
 npm run dev      # http://localhost:3000  → redirects to /editor
 ```
 
+### …or in GitHub Codespaces (no local setup)
+
+Open the repo → **Code ▸ Codespaces ▸ Create codespace**. The included
+`.devcontainer` installs dependencies and starts `npm run dev` automatically;
+when port 3000 forwards, open the preview. For real ASR, add a Codespaces secret
+(`DEEPGRAM_API_KEY` or `ASSEMBLYAI_API_KEY`).
+
 Then: **Upload video** → **Auto-transcribe** (stub) → edit the transcript →
 pick a preset / tweak the style → scrub the preview.
 
@@ -56,17 +63,19 @@ timestamps into cues, so karaoke sync is exact):
 
 ```bash
 cp .env.example .env.local
-# edit .env.local:
-DEEPGRAM_API_KEY=dg_xxx        # https://console.deepgram.com/
-# DEEPGRAM_MODEL=nova-2        # optional
+# edit .env.local — set ONE of:
+DEEPGRAM_API_KEY=dg_xxx          # https://console.deepgram.com/
+# ASSEMBLYAI_API_KEY=aai_xxx     # https://www.assemblyai.com/
+# DEEPGRAM_MODEL=nova-2          # optional
 ```
 
 Architecture (`src/server/transcription`): a `Provider` interface with pluggable
-backends — `stub` (default) and `deepgram` (real). Adding AssemblyAI or
-self-hosted WhisperX (plan §4.3) is a new file implementing the same interface;
-`parse.ts` already includes (unit-tested) parsers for Deepgram and AssemblyAI.
-`GET /api/transcribe` reports which backend is active so the UI uploads media
-only when a real provider needs it.
+backends — `stub` (default), `deepgram` (single request), and `assemblyai`
+(upload → poll). Priority is Deepgram → AssemblyAI → stub. Adding self-hosted
+WhisperX (plan §4.3) is just another file implementing the same interface;
+`parse.ts` holds the (unit-tested) response parsers. `GET /api/transcribe`
+reports which backend is active — the UI shows it as an `ASR:` badge and uploads
+media only when a real provider needs it.
 
 ## CI
 
@@ -85,8 +94,8 @@ npm test           # vitest — engine unit tests
 
 ## Next phases (see WEBSAASPLAN.md)
 
-- **Phase 2** — ✅ real ASR behind `/api/transcribe` (Deepgram). Next: queue +
-  progress for long videos, audio extraction, more backends (AssemblyAI/WhisperX).
+- **Phase 2** — ✅ real ASR behind `/api/transcribe` (Deepgram + AssemblyAI).
+  Next: queue + progress for long videos, audio extraction, WhisperX backend.
 - **Phase 3** — server render worker: run `renderFrame` headless + ffmpeg
   burn-in → MP4.
 - **Phase 4–5** — accounts, projects, storage lifecycle, Stripe + credits.

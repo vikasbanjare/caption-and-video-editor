@@ -7,6 +7,7 @@ interface Props {
   hasCues: boolean;
   busy: boolean;
   language: string;
+  providerLabel: string;
   status: string;
   onUpload: (file: File) => void;
   onImportSrt: (text: string) => void;
@@ -28,6 +29,7 @@ export default function Toolbar({
   hasCues,
   busy,
   language,
+  providerLabel,
   status,
   onUpload,
   onImportSrt,
@@ -46,6 +48,14 @@ export default function Toolbar({
         <span className="rounded bg-panel2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
           Phase 1
         </span>
+        {providerLabel && (
+          <span
+            className="rounded bg-panel2 px-1.5 py-0.5 text-[10px] text-slate-400"
+            title="Active transcription backend"
+          >
+            ASR: {providerLabel}
+          </span>
+        )}
       </div>
 
       <button className="btn" onClick={() => videoInput.current?.click()}>

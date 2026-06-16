@@ -3,7 +3,7 @@ import { cuesFromWords } from "@/engine";
 import {
   activeProvider,
   buildStubSrt,
-  transcribeDeepgram,
+  transcribeMedia,
 } from "@/server/transcription";
 
 /**
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   // --- real ASR path: media uploaded as multipart/form-data ------------------
   if (contentType.includes("multipart/form-data")) {
-    if (provider.id !== "deepgram") {
+    if (!provider.needsMedia) {
       return NextResponse.json(
         { error: "No media-based transcription provider is configured." },
         { status: 501 }
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Missing file." }, { status: 400 });
       }
       const bytes = await file.arrayBuffer();
-      const words = await transcribeDeepgram({
+      const words = await transcribeMedia({
         bytes,
         contentType: file.type || "application/octet-stream",
         language,

@@ -7,7 +7,7 @@ import type { Cue, Word } from "@/engine";
  * new file implementing this interface, nothing else changes.
  */
 
-export type ProviderId = "stub" | "deepgram";
+export type ProviderId = "stub" | "deepgram" | "assemblyai";
 
 export interface TranscriptionResult {
   cues: Cue[];

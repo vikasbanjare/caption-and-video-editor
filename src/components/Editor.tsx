@@ -42,6 +42,15 @@ export default function Editor() {
   const [status, setStatus] = useState("Upload a video to begin.");
   const [currentTime, setCurrentTime] = useState(0);
   const [seekTo, setSeekTo] = useState<{ t: number } | null>(null);
+  const [providerLabel, setProviderLabel] = useState("");
+
+  // Discover which transcription backend is active (stub vs. real ASR).
+  useEffect(() => {
+    fetch("/api/transcribe")
+      .then((r) => r.json())
+      .then((d) => setProviderLabel(d.label || ""))
+      .catch(() => {});
+  }, []);
 
   // Revoke the object URL when it changes / on unmount to avoid leaks.
   useEffect(() => {
@@ -199,6 +208,7 @@ export default function Editor() {
         hasCues={cues.length > 0}
         busy={busy}
         language={language}
+        providerLabel={providerLabel}
         status={status}
         onUpload={handleUpload}
         onImportSrt={handleImportSrt}
