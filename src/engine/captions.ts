@@ -236,3 +236,22 @@ export function romanizeTranscript(transcript: Transcript): Transcript {
 export function transcriptDuration(cues: Cue[]): number {
   return cues.length ? cues[cues.length - 1].end : 0;
 }
+
+/**
+ * Wrap a flat, word-timed list (e.g. from an ASR provider in Phase 2) into a
+ * single cue. The real per-word timestamps are preserved; callers then run
+ * {@link regroupCues} to chunk them into the user's wordsPerCue, so karaoke
+ * sync is driven by true word timings rather than the even split used for SRT.
+ */
+export function cuesFromWords(words: Word[]): Cue[] {
+  if (words.length === 0) return [];
+  return [
+    {
+      id: nextId(),
+      start: words[0].start,
+      end: words[words.length - 1].end,
+      text: words.map((w) => w.text).join(" "),
+      words,
+    },
+  ];
+}

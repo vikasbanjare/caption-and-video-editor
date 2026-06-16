@@ -31,6 +31,7 @@ import StylePanel from "./StylePanel";
  */
 export default function Editor() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [duration, setDuration] = useState(0);
   const [cues, setCues] = useState<Cue[]>([]);
   const [style, setStyle] = useState<CaptionStyle>(() =>
@@ -71,6 +72,7 @@ export default function Editor() {
       if (videoUrl) URL.revokeObjectURL(videoUrl);
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
+      setVideoFile(file);
       setStatus(`Loaded ${file.name}. Auto-transcribe or import an SRT.`);
     },
     [videoUrl]
@@ -79,27 +81,46 @@ export default function Editor() {
   const handleTranscribe = useCallback(async () => {
     if (!videoUrl) return;
     setBusy(true);
-    setStatus("Transcribing (stub)…");
     try {
-      const res = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ durationSeconds: duration, language }),
-      });
-      const data = await res.json();
-      const parsed = parseSRT(data.srt);
-      setCues(finalize(parsed, style));
-      setStatus(
-        data.stub
-          ? "Stub transcript loaded — edit it, then style. (Real ASR lands in Phase 2.)"
-          : "Transcript loaded."
-      );
+      // Ask which backend is active (real ASR vs. stub).
+      const cap = await fetch("/api/transcribe")
+        .then((r) => r.json())
+        .catch(() => null);
+
+      if (cap?.ready && cap.needsMedia && videoFile) {
+        // Real path: upload the media, get back word-level cues.
+        setStatus(`Transcribing with ${cap.label}…`);
+        const fd = new FormData();
+        fd.append("file", videoFile);
+        fd.append("language", language);
+        const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Transcription failed");
+        setCues(finalize(data.cues as Cue[], style));
+        setStatus(`Transcribed with ${cap.label}. Edit, then style.`);
+      } else {
+        // Stub path: metadata only.
+        setStatus("Transcribing (stub)…");
+        const res = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ durationSeconds: duration, language }),
+        });
+        const data = await res.json();
+        const parsed = parseSRT(data.srt);
+        setCues(finalize(parsed, style));
+        setStatus(
+          data.stub
+            ? "Stub transcript loaded — edit it, then style. (Set DEEPGRAM_API_KEY for real ASR.)"
+            : "Transcript loaded."
+        );
+      }
     } catch (err) {
       setStatus(`Transcription failed: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
-  }, [videoUrl, duration, language, style, finalize]);
+  }, [videoUrl, videoFile, duration, language, style, finalize]);
 
   const handleImportSrt = useCallback(
     (text: string) => {

@@ -1,85 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cuesFromWords } from "@/engine";
+import {
+  activeProvider,
+  buildStubSrt,
+  transcribeDeepgram,
+} from "@/server/transcription";
 
 /**
- * Transcription STUB (WEBSAASPLAN.md §6 Phase 1: "transcription via a cloud API
- * stub first"). It does NOT touch the video — it returns a believable sample
- * transcript spread across the clip's duration so the whole editor flow
- * (transcribe → editable transcript → live styled preview) works end to end.
+ * Transcription endpoint (WEBSAASPLAN.md §4.2 / §4.3).
  *
- * Phase 2 replaces the body of this handler with a real call: enqueue a job,
- * run WhisperX / a commercial API on the audio, and return word-level cues
- * (§4.3). The request/response shape is meant to survive that swap.
+ *   GET  → which provider is active and whether it needs the media uploaded.
+ *   POST → run it:
+ *          • multipart/form-data (file + language) → real ASR (Deepgram),
+ *            returns word-timed cues.
+ *          • application/json   ({durationSeconds, language}) → stub sample SRT.
+ *
+ * Set DEEPGRAM_API_KEY to switch from the stub to real transcription. The
+ * request/response shape is stable across that swap so the client doesn't care
+ * which backend ran.
  */
 
 export const runtime = "nodejs";
+// Allow larger uploads for the real (media) path.
+export const maxDuration = 60;
 
-const EN_SCRIPT = [
-  "Okay so here is the one thing nobody tells you",
-  "most people quit right before it actually works",
-  "the secret is showing up when you do not feel like it",
-  "small reps every single day beat one big burst",
-  "save this so you remember it next week",
-  "and if this helped you follow for part two",
-];
-
-// Showcases Hinglish romanization when language is "hi".
-const HI_SCRIPT = [
-  "देखो दोस्तों आज मैं आपको एक राज़ बताने वाला हूँ",
-  "ज़्यादातर लोग ठीक पहले ही हार मान लेते हैं",
-  "रोज़ थोड़ा थोड़ा करना ही असली जादू है",
-  "इसे सेव कर लो ताकि अगले हफ़्ते याद रहे",
-];
-
-function pad(n: number, w = 2) {
-  return String(n).padStart(w, "0");
-}
-function tc(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.round((seconds - Math.floor(seconds)) * 1000);
-  return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
-}
-
-function buildSrt(durationSeconds: number, language: string): string {
-  const script = language?.toLowerCase().startsWith("hi") ? HI_SCRIPT : EN_SCRIPT;
-  const dur = Math.max(4, Math.min(durationSeconds || 30, 60 * 30));
-  const perCue = Math.max(1.6, Math.min(2.6, dur / script.length));
-
-  const blocks: string[] = [];
-  let t = 0.2;
-  let i = 0;
-  let n = 1;
-  while (t < dur - 0.2) {
-    const line = script[i % script.length];
-    const end = Math.min(dur, t + perCue);
-    blocks.push(`${n}\n${tc(t)} --> ${tc(end)}\n${line}`);
-    t = end + 0.05;
-    i++;
-    n++;
-  }
-  return blocks.join("\n\n") + "\n";
+export async function GET() {
+  const p = activeProvider();
+  return NextResponse.json({
+    provider: p.id,
+    label: p.label,
+    ready: p.ready,
+    needsMedia: p.needsMedia,
+  });
 }
 
 export async function POST(req: NextRequest) {
+  const contentType = req.headers.get("content-type") || "";
+  const provider = activeProvider();
+
+  // --- real ASR path: media uploaded as multipart/form-data ------------------
+  if (contentType.includes("multipart/form-data")) {
+    if (provider.id !== "deepgram") {
+      return NextResponse.json(
+        { error: "No media-based transcription provider is configured." },
+        { status: 501 }
+      );
+    }
+    try {
+      const form = await req.formData();
+      const file = form.get("file");
+      const language = String(form.get("language") || "en");
+      if (!(file instanceof Blob)) {
+        return NextResponse.json({ error: "Missing file." }, { status: 400 });
+      }
+      const bytes = await file.arrayBuffer();
+      const words = await transcribeDeepgram({
+        bytes,
+        contentType: file.type || "application/octet-stream",
+        language,
+      });
+      return NextResponse.json({
+        provider: provider.id,
+        language,
+        cues: cuesFromWords(words),
+      });
+    } catch (err) {
+      return NextResponse.json(
+        { error: (err as Error).message || "Transcription failed." },
+        { status: 502 }
+      );
+    }
+  }
+
+  // --- stub path: JSON metadata only ----------------------------------------
   let body: { durationSeconds?: number; language?: string } = {};
   try {
     body = await req.json();
   } catch {
-    // empty body is fine — fall back to defaults
+    // empty body → defaults
   }
-
   const durationSeconds = Number(body.durationSeconds) || 30;
   const language = body.language || "en";
 
-  // Simulate async work without holding the request too long.
-  await new Promise((r) => setTimeout(r, 600));
+  // Simulate a little async work without holding the request too long.
+  await new Promise((r) => setTimeout(r, 400));
 
   return NextResponse.json({
     stub: true,
+    provider: "stub",
     language,
-    srt: buildSrt(durationSeconds, language),
+    srt: buildStubSrt(durationSeconds, language),
     note:
-      "Stubbed transcript (Phase 1). Replace /api/transcribe with WhisperX or a commercial ASR in Phase 2.",
+      "Stubbed transcript. Set DEEPGRAM_API_KEY to enable real word-level transcription.",
   });
 }

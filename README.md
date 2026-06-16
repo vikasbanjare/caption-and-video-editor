@@ -13,7 +13,7 @@ burn-in export, accounts, and billing are later phases.
 | Live preview | ✅ `<canvas>` overlaid on `<video>`, driven by the same `renderFrame` the export worker will use |
 | Editable transcript | ✅ edit text, split, merge, delete, click-to-seek |
 | Style panel | ✅ presets, animation, fonts, colors, position, words/cue, outline, shadow, background |
-| Transcription | 🟡 **stub** at `POST /api/transcribe` (returns a sample transcript) — swap for WhisperX / commercial ASR in Phase 2 |
+| Transcription | ✅ provider-agnostic: **Deepgram** (real word-level ASR) when `DEEPGRAM_API_KEY` is set, else a built-in **stub** sample — same `/api/transcribe` contract either way |
 | Export (burn-in MP4) | ⛔ Phase 3 |
 | Auth / billing | ⛔ Phases 4–5 |
 
@@ -47,6 +47,32 @@ pick a preset / tweak the style → scrub the preview.
 No video handy? Click **Import SRT** with any `.srt` file, or transcribe with
 language set to **Hindi → Hinglish** to see Devanagari romanized.
 
+## Real transcription (Phase 2)
+
+With no key configured, `/api/transcribe` serves a stub sample transcript so the
+editor works out of the box. Set a key to switch to real, word-level ASR — the
+client and engine don't change (`captions.js` re-groups the provider's true word
+timestamps into cues, so karaoke sync is exact):
+
+```bash
+cp .env.example .env.local
+# edit .env.local:
+DEEPGRAM_API_KEY=dg_xxx        # https://console.deepgram.com/
+# DEEPGRAM_MODEL=nova-2        # optional
+```
+
+Architecture (`src/server/transcription`): a `Provider` interface with pluggable
+backends — `stub` (default) and `deepgram` (real). Adding AssemblyAI or
+self-hosted WhisperX (plan §4.3) is a new file implementing the same interface;
+`parse.ts` already includes (unit-tested) parsers for Deepgram and AssemblyAI.
+`GET /api/transcribe` reports which backend is active so the UI uploads media
+only when a real provider needs it.
+
+## CI
+
+`.github/workflows/ci.yml` runs typecheck, lint, tests, and build on every push
+to `main` and every PR.
+
 ## Develop
 
 ```bash
@@ -59,8 +85,8 @@ npm test           # vitest — engine unit tests
 
 ## Next phases (see WEBSAASPLAN.md)
 
-- **Phase 2** — replace `/api/transcribe` with a queued WhisperX / commercial
-  ASR job returning word-level cues.
+- **Phase 2** — ✅ real ASR behind `/api/transcribe` (Deepgram). Next: queue +
+  progress for long videos, audio extraction, more backends (AssemblyAI/WhisperX).
 - **Phase 3** — server render worker: run `renderFrame` headless + ffmpeg
   burn-in → MP4.
 - **Phase 4–5** — accounts, projects, storage lifecycle, Stripe + credits.
