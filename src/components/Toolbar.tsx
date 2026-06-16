@@ -7,11 +7,11 @@ interface Props {
   hasCues: boolean;
   busy: boolean;
   language: string;
-  providerLabel: string;
   status: string;
   onUpload: (file: File) => void;
   onImportSrt: (text: string) => void;
   onTranscribe: () => void;
+  onLoadSample: () => void;
   onExportSrt: () => void;
   onLanguage: (lang: string) => void;
 }
@@ -21,19 +21,20 @@ const LANGS = [
   { code: "hi", label: "Hindi → Hinglish" },
   { code: "es", label: "Spanish" },
   { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "pt", label: "Portuguese" },
 ];
 
-/** Top action bar: upload, transcribe (stub), import/export SRT, language. */
 export default function Toolbar({
   hasVideo,
   hasCues,
   busy,
   language,
-  providerLabel,
   status,
   onUpload,
   onImportSrt,
   onTranscribe,
+  onLoadSample,
   onExportSrt,
   onLanguage,
 }: Props) {
@@ -41,30 +42,28 @@ export default function Toolbar({
   const srtInput = useRef<HTMLInputElement>(null);
 
   return (
-    <header className="flex flex-wrap items-center gap-2 border-b border-edge bg-panel px-4 py-2">
-      <div className="mr-2 flex items-center gap-2">
-        <span className="text-lg">🎬</span>
-        <span className="font-semibold text-white">CutPilot</span>
-        <span className="rounded bg-panel2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-          Phase 1
-        </span>
-        {providerLabel && (
-          <span
-            className="rounded bg-panel2 px-1.5 py-0.5 text-[10px] text-slate-400"
-            title="Active transcription backend"
-          >
-            ASR: {providerLabel}
-          </span>
-        )}
+    <header className="flex flex-wrap items-center gap-2 border-b border-edge bg-surface/80 px-4 py-2.5 backdrop-blur">
+      <div className="mr-3 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-grad text-sm shadow-glow">
+          🎬
+        </div>
+        <div className="leading-tight">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold tracking-tight text-white">CutPilot</span>
+            <span className="chip border-accent/30 bg-accent/10 text-accent2">
+              Whisper · in-browser
+            </span>
+          </div>
+        </div>
       </div>
 
       <button className="btn" onClick={() => videoInput.current?.click()}>
-        ⬆ Upload video
+        <UploadIcon /> Upload
       </button>
       <input
         ref={videoInput}
         type="file"
-        accept="video/*"
+        accept="video/*,audio/*"
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -77,7 +76,7 @@ export default function Toolbar({
         value={language}
         onChange={(e) => onLanguage(e.target.value)}
         className="select w-auto"
-        title="Transcription language"
+        title="Spoken language"
       >
         {LANGS.map((l) => (
           <option key={l.code} value={l.code}>
@@ -91,11 +90,17 @@ export default function Toolbar({
         onClick={onTranscribe}
         disabled={!hasVideo || busy}
       >
-        {busy ? "Transcribing…" : "✨ Auto-transcribe"}
+        {busy ? "Working…" : "✨ Auto-transcribe"}
       </button>
 
+      <button className="btn" onClick={onLoadSample} disabled={busy}>
+        Sample
+      </button>
+
+      <div className="mx-1 h-6 w-px bg-edge" />
+
       <button className="btn" onClick={() => srtInput.current?.click()}>
-        ⤓ Import SRT
+        Import SRT
       </button>
       <input
         ref={srtInput}
@@ -108,14 +113,21 @@ export default function Toolbar({
           e.target.value = "";
         }}
       />
-
       <button className="btn" onClick={onExportSrt} disabled={!hasCues}>
-        ⤒ Export SRT
+        Export SRT
       </button>
 
-      <span className="ml-auto truncate text-xs text-slate-400" title={status}>
+      <span className="ml-auto max-w-[40%] truncate text-xs text-muted" title={status}>
         {status}
       </span>
     </header>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 10.5V2.5M8 2.5 5 5.5M8 2.5l3 3M2.5 11v1.5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V11" />
+    </svg>
   );
 }

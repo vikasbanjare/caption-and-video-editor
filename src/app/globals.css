@@ -12,34 +12,68 @@ body {
 }
 
 body {
-  @apply bg-ink text-slate-200 antialiased;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  @apply bg-bg text-slate-200 antialiased;
+  background-image:
+    radial-gradient(900px 500px at 100% -5%, rgba(124, 92, 255, 0.1), transparent 55%),
+    radial-gradient(800px 500px at 0% 0%, rgba(79, 139, 255, 0.08), transparent 50%);
+  background-attachment: fixed;
 }
 
-/* thin scrollbars for the panels */
+/* scrollbars */
 .scroll-thin::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  @apply bg-edge rounded;
+  @apply rounded-full bg-edge2;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: #3e4555;
 }
 .scroll-thin::-webkit-scrollbar-track {
   background: transparent;
 }
 
 input[type="range"] {
-  accent-color: #6d8bff;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: #2a2f3c;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #7c5cff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 @layer components {
-  .select {
-    @apply w-full rounded border border-edge bg-panel2 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-accent;
-  }
   .btn {
-    @apply inline-flex items-center gap-1.5 rounded-md border border-edge bg-panel2 px-3 py-1.5 text-sm text-slate-200 transition-colors hover:border-accent/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center gap-2 rounded-lg border border-edge bg-surface2 px-3.5 py-2 text-sm font-medium text-slate-200 transition-all hover:border-edge2 hover:bg-surface3 hover:text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface2;
   }
   .btn-primary {
-    @apply border-transparent bg-accent text-black hover:bg-accent/90 hover:text-black;
+    @apply border-transparent bg-accent-grad text-white shadow-glow hover:text-white hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-surface2;
+  }
+  .select {
+    @apply w-full cursor-pointer rounded-lg border border-edge bg-surface2 px-3 py-2 text-sm text-slate-100 outline-none transition-colors hover:border-edge2 focus:border-accent;
+  }
+  .card {
+    @apply rounded-xl border border-edge bg-surface shadow-card;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-edge bg-surface2 px-2.5 py-1 text-[11px] font-medium text-muted;
+  }
+  .label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted;
   }
 }

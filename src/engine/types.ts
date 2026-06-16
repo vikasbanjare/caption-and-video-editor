@@ -37,11 +37,15 @@ export type AnimationKind =
   | "none"
   | "fade"
   | "pop"
+  | "bounce"
   | "slide-up"
   | "karaoke"
   | "word-by-word";
 
 export type CaptionPosition = "top" | "center" | "bottom";
+
+/** How the "active"/highlighted word is emphasised. */
+export type HighlightMode = "color" | "box";
 
 /**
  * Style for a project's captions. All sizes that must look identical between
@@ -81,4 +85,19 @@ export interface CaptionStyle {
   /** drop-shadow blur as a fraction of the font pixel size */
   shadowBlur: number;
   shadowColor: string;
+  /** letter spacing in em */
+  letterSpacing: number;
+
+  // --- emphasis ---
+  /** how the active/highlighted word is shown: recolor it, or sit it in a box */
+  highlightMode: HighlightMode;
+  /** rounded-box color drawn behind the active word (when highlightMode==="box") */
+  activeBoxColor: string;
+  /** text color used on top of the active box */
+  activeBoxTextColor: string;
+  /** neon glow strength, 0–1 (0 = off) */
+  glow: number;
+  glowColor: string;
+  /** corner radius for pills/boxes, as a fraction of the font pixel size */
+  cornerRadius: number;
 }
