@@ -19,7 +19,12 @@ import {
   mergeWithNext,
   deleteCue,
 } from "@/lib/transcript";
+import { buildStubSrt } from "@/server/transcription/stub";
 import Toolbar from "./Toolbar";
+
+// In the static GitHub Pages demo there is no server, so transcription runs
+// entirely in the browser (sample stub only).
+const STATIC_DEMO = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
 import StylePanel from "./StylePanel";
@@ -46,6 +51,10 @@ export default function Editor() {
 
   // Discover which transcription backend is active (stub vs. real ASR).
   useEffect(() => {
+    if (STATIC_DEMO) {
+      setProviderLabel("Sample (demo)");
+      return;
+    }
     fetch("/api/transcribe")
       .then((r) => r.json())
       .then((d) => setProviderLabel(d.label || ""))
@@ -91,6 +100,15 @@ export default function Editor() {
     if (!videoUrl) return;
     setBusy(true);
     try {
+      // Static demo: no server — generate the sample transcript in-browser.
+      if (STATIC_DEMO) {
+        setStatus("Transcribing (demo sample)…");
+        const srt = buildStubSrt(duration || 30, language);
+        setCues(finalize(parseSRT(srt), style));
+        setStatus("Demo sample transcript loaded — edit it, then style.");
+        return;
+      }
+
       // Ask which backend is active (real ASR vs. stub).
       const cap = await fetch("/api/transcribe")
         .then((r) => r.json())
