@@ -63,6 +63,10 @@ export default function Editor() {
   const timeRef = useRef(0);
   const playingRef = useRef(false);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
+  // identity of the currently loaded file — guards async results from stale uploads
+  const videoFileRef = useRef<File | null>(null);
+  const styleRef = useRef(style);
+  styleRef.current = style;
 
   // ---- undo/redo history (refs + tick keep this StrictMode-safe) ------------
   const cuesRef = useRef(cues);
@@ -161,16 +165,31 @@ export default function Editor() {
       return URL.createObjectURL(file);
     });
     setVideoFile(file);
+    videoFileRef.current = file;
     setSelectedId(null);
+    // new media = new project: clear captions AND history so undo can't
+    // resurrect the previous video's cues
+    pastRef.current = [];
+    futureRef.current = [];
+    lastActionRef.current = "";
+    setHistoryTick((t) => t + 1);
+    setCuesRaw([]);
     setStatus(`Loaded ${file.name}. Hit Auto-transcribe.`);
   }, []);
 
   const handleTranscribe = useCallback(async () => {
-    if (!videoFile) return;
+    const file = videoFile;
+    if (!file) return;
     setBusy(true);
     setProgress({ phase: "decoding", label: "Reading audio…" });
     try {
-      const words = await transcribeInBrowser(videoFile, language, setProgress);
+      const words = await transcribeInBrowser(file, language, setProgress);
+      // a different video may have been loaded while Whisper was running —
+      // never commit a stale transcript onto the new clip
+      if (videoFileRef.current !== file) {
+        setStatus("Discarded a finished transcription for a previously loaded video.");
+        return;
+      }
       if (words.length === 0) throw new Error("No speech detected in this clip.");
       commit(finalize(cuesFromWords(words), style));
       setStatus(`Transcribed ${words.length} words — all in your browser.`);
@@ -211,28 +230,32 @@ export default function Editor() {
   }, []);
 
   // ---- style ----------------------------------------------------------------
+  // NOTE: state updaters must stay pure (StrictMode double-invokes them), so
+  // the regroup commit happens OUTSIDE setStyle, using styleRef for "prev".
   const handleStyleChange = useCallback(
     (patch: Partial<CaptionStyle>) => {
-      setStyle((prev) => {
-        const next = { ...prev, ...patch };
-        if (
-          patch.wordsPerCue !== undefined &&
-          patch.wordsPerCue !== prev.wordsPerCue
-        ) {
-          commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
-          setSelectedId(null);
-        }
-        return next;
-      });
+      const prev = styleRef.current;
+      const next = { ...prev, ...patch };
+      setStyle(next);
+      if (
+        patch.wordsPerCue !== undefined &&
+        patch.wordsPerCue !== prev.wordsPerCue
+      ) {
+        commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
+        setSelectedId(null);
+      }
     },
     [commit]
   );
 
   const handlePreset = useCallback(
     (id: string) => {
+      const prev = styleRef.current;
       const next = styleFromPreset(id);
       setStyle(next);
-      if (cuesRef.current.length) {
+      // only regroup when the word count actually changes — a pure style swap
+      // must not discard manual splits/merges/trims on the timeline
+      if (cuesRef.current.length && next.wordsPerCue !== prev.wordsPerCue) {
         commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
         setSelectedId(null);
       }
@@ -285,11 +308,24 @@ export default function Editor() {
   );
   const onAddAt = useCallback(
     (t: number) => {
-      commit((cs) => insertCueAt(cs, t));
-      setStatus("Caption added — double-click its text in the transcript to edit.");
+      const prev = cuesRef.current;
+      const next = insertCueAt(prev, t);
+      if (next === prev) {
+        setStatus("No room at the playhead — captions can't overlap.");
+        return;
+      }
+      commit(next);
+      setStatus("Caption added — edit its text in the transcript.");
     },
     [commit]
   );
+
+  // drop the selection if its cue disappears (delete, split, regroup, undo…)
+  useEffect(() => {
+    if (selectedId && !cues.some((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [cues, selectedId]);
 
   // ---- keyboard shortcuts -------------------------------------------------------
   const selectedIdRef = useRef(selectedId);

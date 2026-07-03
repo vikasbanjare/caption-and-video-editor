@@ -51,9 +51,10 @@ export function retimeCue(
   });
 }
 
-/** Delete a cue. */
+/** Delete a cue. Returns the SAME array when the id is absent so callers'
+ *  reference-equality checks (e.g. undo history) see it as a no-op. */
 export function deleteCue(cues: Cue[], id: string): Cue[] {
-  return cues.filter((c) => c.id !== id);
+  return cues.some((c) => c.id === id) ? cues.filter((c) => c.id !== id) : cues;
 }
 
 /**

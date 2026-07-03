@@ -112,6 +112,11 @@ describe("deleteCue", () => {
   it("removes by id", () => {
     expect(deleteCue([cue("a", 0, 1, [["x", 0, 1]])], "a")).toHaveLength(0);
   });
+
+  it("returns the same array when the id is absent (no phantom undo step)", () => {
+    const cues = [cue("a", 0, 1, [["x", 0, 1]])];
+    expect(deleteCue(cues, "missing")).toBe(cues);
+  });
 });
 
 describe("computePeaks", () => {

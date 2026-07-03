@@ -90,6 +90,11 @@ export default function Timeline({
   } | null>(null);
 
   const dragRef = useRef<Drag | null>(null);
+  // mirror of dragTemp — lets endCueDrag commit without side effects inside a
+  // state updater (React StrictMode may double-invoke updaters)
+  const dragTempRef = useRef<{ id: string; start: number; end: number } | null>(
+    null
+  );
   const ppsRef = useRef<number>(0);
   ppsRef.current = pps ?? 0;
   const userZoomed = useRef(false);
@@ -153,17 +158,20 @@ export default function Timeline({
         ctx.fillStyle = "#5b6270";
         ctx.font = "9px ui-monospace, monospace";
         ctx.textBaseline = "top";
-        const t0 = Math.floor(left / p / minor) * minor;
-        const t1 = (left + w) / p;
-        for (let t = t0; t <= t1 + 1e-6; t += minor) {
+        // index-based ticks — no float accumulation, so labels stay exact
+        const k0 = Math.floor(left / p / minor);
+        const k1 = Math.ceil((left + w) / p / minor);
+        for (let k = k0; k <= k1; k++) {
+          const t = k * minor;
+          if (t < 0) continue;
           const x = Math.round(t * p - left) + 0.5;
-          const isMajor = Math.abs(t / major - Math.round(t / major)) < 1e-4;
+          const isMajor = k % 5 === 0;
           ctx.strokeStyle = isMajor ? "#454c5c" : "#2b303c";
           ctx.beginPath();
           ctx.moveTo(x, RULER_H);
           ctx.lineTo(x, RULER_H - (isMajor ? 10 : 5));
           ctx.stroke();
-          if (isMajor && t >= 0) ctx.fillText(fmtClock(t), x + 3, 4);
+          if (isMajor) ctx.fillText(fmtClock(t), x + 3, 4);
         }
       }
     }
@@ -221,6 +229,9 @@ export default function Timeline({
   const zoomTo = useCallback((nextPps: number, anchorT?: number, anchorX?: number) => {
     userZoomed.current = true;
     const p = clamp(nextPps, PPS_MIN, PPS_MAX);
+    // fully clamped → pps won't change → the anchor effect would never fire,
+    // so don't store an anchor that would hijack a later zoom
+    if (p === ppsRef.current) return;
     if (anchorT !== undefined && anchorX !== undefined) {
       zoomAnchor.current = { t: anchorT, x: anchorX };
     } else {
@@ -248,6 +259,7 @@ export default function Timeline({
 
   const fitZoom = useCallback(() => {
     userZoomed.current = false;
+    zoomAnchor.current = null; // Fit owns the scroll position
     if (viewportW) setPps(clamp((viewportW - 16) / totalT, PPS_MIN, PPS_MAX));
     const sc = scrollRef.current;
     if (sc) sc.scrollLeft = 0;
@@ -366,7 +378,9 @@ export default function Timeline({
         origEnd: c.end,
         moved: false,
       };
-      setDragTemp({ id: c.id, start: c.start, end: c.end });
+      const temp = { id: c.id, start: c.start, end: c.end };
+      dragTempRef.current = temp;
+      setDragTemp(temp);
     },
     []
   );
@@ -402,9 +416,11 @@ export default function Timeline({
         end = clamp(end, d.origStart + MIN_CUE, maxEnd);
       } else {
         const span = d.origEnd - d.origStart;
-        const maxStart = Number.isFinite(nextStart)
-          ? nextStart - span
-          : Number.POSITIVE_INFINITY;
+        // the last cue may not be moved past the end of the video
+        const rightWall = Number.isFinite(nextStart)
+          ? nextStart
+          : Math.max(durationRef.current, d.origEnd);
+        const maxStart = rightWall - span;
         let s = clamp(d.origStart + dt, prevEnd, Math.max(prevEnd, maxStart));
         // try snapping either edge, keep the smaller correction
         const sSnap = snap(s, d.id);
@@ -416,7 +432,9 @@ export default function Timeline({
         start = s;
         end = s + span;
       }
-      setDragTemp({ id: d.id, start, end });
+      const temp = { id: d.id, start, end };
+      dragTempRef.current = temp;
+      setDragTemp(temp);
     },
     [snap]
   );
@@ -425,21 +443,21 @@ export default function Timeline({
     const d = dragRef.current;
     if (!d || d.kind === "scrub") return;
     dragRef.current = null;
-    setDragTemp((temp) => {
-      if (!temp) return null;
-      if (d.moved) {
-        if (
-          Math.abs(temp.start - d.origStart) > 1e-4 ||
-          Math.abs(temp.end - d.origEnd) > 1e-4
-        ) {
-          onRetime(d.id, temp.start, temp.end);
-        }
-      } else {
-        onSelect(d.id);
-        onSeek(d.origStart + 1e-3);
+    const temp = dragTempRef.current;
+    dragTempRef.current = null;
+    setDragTemp(null);
+    if (!temp) return;
+    if (d.moved) {
+      if (
+        Math.abs(temp.start - d.origStart) > 1e-4 ||
+        Math.abs(temp.end - d.origEnd) > 1e-4
+      ) {
+        onRetime(d.id, temp.start, temp.end);
       }
-      return null;
-    });
+    } else {
+      onSelect(d.id);
+      onSeek(d.origStart + 1e-3);
+    }
   }, [onRetime, onSelect, onSeek]);
 
   if (duration <= 0) return null;

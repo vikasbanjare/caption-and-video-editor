@@ -114,7 +114,12 @@ function IconBtn({
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        // don't bubble into the row's select handler — after a delete/split
+        // that would re-select a cue id that no longer exists
+        e.stopPropagation();
+        onClick();
+      }}
       disabled={disabled}
       title={label}
       aria-label={label}
