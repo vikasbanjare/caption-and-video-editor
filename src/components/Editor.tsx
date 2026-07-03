@@ -328,6 +328,17 @@ export default function Editor() {
         e.preventDefault();
         const step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowLeft" ? -1 : 1);
         onSeek(Math.max(0, timeRef.current + step));
+      } else if (e.key === "," || e.key === ".") {
+        // frame-step (~1/30s), pausing for precision — Daxio-style , / .
+        e.preventDefault();
+        const v = videoElRef.current;
+        if (v) {
+          v.pause();
+          v.currentTime = Math.max(
+            0,
+            v.currentTime + (e.key === "," ? -1 : 1) / 30
+          );
+        }
       }
     };
     window.addEventListener("keydown", onKey);

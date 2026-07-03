@@ -468,7 +468,7 @@ export default function Timeline({
         />
 
         <span className="ml-auto hidden text-[10px] text-muted/70 md:inline">
-          drag block = move · drag edges = trim · space = play · S = split
+          drag = move · edges = trim · space = play · S = split · , . = frame step
         </span>
         <div className="ml-2 flex items-center gap-1">
           <TlBtn label="Zoom out" onClick={() => zoomTo((ppsRef.current || 40) * 0.7)}>

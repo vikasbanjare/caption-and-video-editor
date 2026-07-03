@@ -48,6 +48,24 @@ export default function VideoStage({
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [rate, setRate] = useState(1);
+
+  /** step one frame (~1/30s) while paused — precise caption timing */
+  const frameStep = useCallback((dir: 1 | -1) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    v.currentTime = Math.max(0, v.currentTime + dir / 30);
+  }, []);
+
+  const cycleRate = useCallback(() => {
+    const rates = [0.5, 1, 1.5, 2];
+    setRate((r) => {
+      const next = rates[(rates.indexOf(r) + 1) % rates.length];
+      if (videoRef.current) videoRef.current.playbackRate = next;
+      return next;
+    });
+  }, []);
 
   const cuesRef = useRef(cues);
   const styleRef = useRef(style);
@@ -123,6 +141,7 @@ export default function VideoStage({
               const d = e.currentTarget.duration || 0;
               setDuration(d);
               onDuration(d);
+              e.currentTarget.playbackRate = rate;
             }}
             onPlay={() => {
               setPlaying(true);
@@ -159,17 +178,29 @@ export default function VideoStage({
       </div>
 
       {/* transport */}
-      <div className="mt-4 flex w-full max-w-xl items-center gap-3">
+      <div className="mt-4 flex w-full max-w-xl items-center gap-2">
+        <button
+          onClick={() => frameStep(-1)}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface2 text-slate-300 transition-colors hover:text-white"
+          aria-label="Previous frame"
+          title="Previous frame (,)"
+        >
+          <StepIcon dir={-1} />
+        </button>
         <button
           onClick={togglePlay}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-grad text-white shadow-glow transition-transform active:scale-95"
           aria-label={playing ? "Pause" : "Play"}
         >
-          {playing ? (
-            <PauseIcon />
-          ) : (
-            <PlayIcon />
-          )}
+          {playing ? <PauseIcon /> : <PlayIcon />}
+        </button>
+        <button
+          onClick={() => frameStep(1)}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface2 text-slate-300 transition-colors hover:text-white"
+          aria-label="Next frame"
+          title="Next frame (.)"
+        >
+          <StepIcon dir={1} />
         </button>
         <input
           type="range"
@@ -178,14 +209,23 @@ export default function VideoStage({
           step={0.01}
           value={Math.min(time, duration || 0)}
           onChange={onScrub}
-          className="flex-1 cursor-pointer"
+          className="min-w-0 flex-1 cursor-pointer"
           style={{
             background: `linear-gradient(to right, #7c5cff ${pct}%, #2a2f3c ${pct}%)`,
           }}
+          aria-label="Seek"
         />
-        <span className="w-[92px] shrink-0 text-right font-mono text-xs text-muted">
+        <span className="w-[92px] shrink-0 text-right font-mono text-xs tabular-nums text-muted">
           {fmtClock(time)} / {fmtClock(duration)}
         </span>
+        <button
+          onClick={cycleRate}
+          className="h-7 w-11 shrink-0 rounded-md border border-edge bg-surface2 font-mono text-[11px] text-slate-300 transition-colors hover:text-white"
+          title="Playback speed"
+          aria-label={`Playback speed ${rate}x`}
+        >
+          {rate}×
+        </button>
       </div>
     </div>
   );
@@ -219,6 +259,20 @@ function PauseIcon() {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
       <rect x="3" y="2" width="4" height="12" rx="1" />
       <rect x="9" y="2" width="4" height="12" rx="1" />
+    </svg>
+  );
+}
+function StepIcon({ dir }: { dir: 1 | -1 }) {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 12 12"
+      fill="currentColor"
+      style={{ transform: dir === -1 ? "scaleX(-1)" : undefined }}
+    >
+      <path d="M1.5 1.8v8.4a.4.4 0 0 0 .62.33l6-4.2a.4.4 0 0 0 0-.66l-6-4.2a.4.4 0 0 0-.62.33Z" />
+      <rect x="9.2" y="1.5" width="1.6" height="9" rx="0.6" />
     </svg>
   );
 }
