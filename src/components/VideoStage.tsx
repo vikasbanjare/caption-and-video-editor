@@ -11,6 +11,7 @@ import type { Cue, CaptionStyle } from "@/engine";
 import { activeCueAt, renderFrame } from "@/engine";
 import { fmtClock } from "@/lib/transcript";
 import type { TranscribeProgress } from "@/lib/transcribe-browser";
+import type { ProjectNote } from "@/lib/store";
 
 interface Props {
   videoUrl: string;
@@ -25,6 +26,11 @@ interface Props {
   /** gives the parent direct access to the <video> (play/pause, keyboard) */
   onVideoEl?: (el: HTMLVideoElement | null) => void;
   onPlayingChange?: (playing: boolean) => void;
+  // frame notes (ported from Daxio pins)
+  notes?: ProjectNote[];
+  noteMode?: boolean;
+  onAddNote?: (x: number, y: number, t: number) => void;
+  onSeekNote?: (t: number) => void;
 }
 
 /**
@@ -42,9 +48,14 @@ export default function VideoStage({
   timeRef,
   onVideoEl,
   onPlayingChange,
+  notes,
+  noteMode,
+  onAddNote,
+  onSeekNote,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pinLayerRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -82,6 +93,7 @@ export default function VideoStage({
         const ctx = canvas.getContext("2d");
         if (ctx) {
           fitCanvas(canvas, video);
+          if (pinLayerRef.current) placeOverVideo(pinLayerRef.current, video);
           const t = video.currentTime;
           if (timeRef) timeRef.current = t;
           renderFrame({
@@ -135,7 +147,7 @@ export default function VideoStage({
               onVideoEl?.(el);
             }}
             src={videoUrl}
-            className="block max-h-full max-w-full"
+            className={`block max-h-full max-w-full ${noteMode ? "cursor-crosshair" : ""}`}
             playsInline
             onLoadedMetadata={(e) => {
               const d = e.currentTarget.duration || 0;
@@ -151,9 +163,38 @@ export default function VideoStage({
               setPlaying(false);
               onPlayingChange?.(false);
             }}
-            onClick={togglePlay}
+            onClick={(e) => {
+              if (noteMode && onAddNote && videoRef.current) {
+                const rect = videoRef.current.getBoundingClientRect();
+                const x = clamp01((e.clientX - rect.left) / rect.width);
+                const y = clamp01((e.clientY - rect.top) / rect.height);
+                onAddNote(x, y, videoRef.current.currentTime);
+              } else {
+                togglePlay();
+              }
+            }}
           />
           <canvas ref={canvasRef} className="pointer-events-none absolute" />
+
+          {/* frame-note pins (positioned within the video box) */}
+          <div ref={pinLayerRef} className="pointer-events-none absolute">
+            {(notes ?? [])
+              .filter((n) => n.x !== null && n.y !== null)
+              .map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => onSeekNote?.(n.t)}
+                  title={n.body || "note"}
+                  aria-label={`Note at ${fmtClock(n.t)}`}
+                  className={`pointer-events-auto absolute flex h-6 w-6 -translate-x-1/2 -translate-y-full items-center justify-center rounded-[50%_50%_50%_3px] text-[10px] shadow-md transition-transform hover:scale-110 ${
+                    n.resolved ? "bg-good" : "bg-accent"
+                  }`}
+                  style={{ left: `${(n.x ?? 0) * 100}%`, top: `${(n.y ?? 0) * 100}%` }}
+                >
+                  📌
+                </button>
+              ))}
+          </div>
 
           {progress && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center backdrop-blur-sm">
@@ -231,6 +272,18 @@ export default function VideoStage({
   );
 }
 
+const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
+
+/** Position an absolutely-placed overlay to exactly cover the video's box. */
+function placeOverVideo(el: HTMLElement, video: HTMLVideoElement) {
+  const rect = video.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  el.style.width = `${rect.width}px`;
+  el.style.height = `${rect.height}px`;
+  el.style.left = `${video.offsetLeft}px`;
+  el.style.top = `${video.offsetTop}px`;
+}
+
 function fitCanvas(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
   const rect = video.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
@@ -241,10 +294,7 @@ function fitCanvas(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
     canvas.width = w;
     canvas.height = h;
   }
-  canvas.style.width = `${rect.width}px`;
-  canvas.style.height = `${rect.height}px`;
-  canvas.style.left = `${video.offsetLeft}px`;
-  canvas.style.top = `${video.offsetTop}px`;
+  placeOverVideo(canvas, video);
 }
 
 function PlayIcon() {

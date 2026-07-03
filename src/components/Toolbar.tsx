@@ -5,6 +5,9 @@ import { useRef } from "react";
 interface Props {
   hasVideo: boolean;
   hasCues: boolean;
+  hasProject: boolean;
+  title: string;
+  projectCount: number;
   busy: boolean;
   language: string;
   status: string;
@@ -12,6 +15,8 @@ interface Props {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  onTitleChange: (t: string) => void;
+  onOpenLibrary: () => void;
   onUpload: (file: File) => void;
   onImportSrt: (text: string) => void;
   onTranscribe: () => void;
@@ -32,6 +37,9 @@ const LANGS = [
 export default function Toolbar({
   hasVideo,
   hasCues,
+  hasProject,
+  title,
+  projectCount,
   busy,
   language,
   status,
@@ -39,6 +47,8 @@ export default function Toolbar({
   canRedo,
   onUndo,
   onRedo,
+  onTitleChange,
+  onOpenLibrary,
   onUpload,
   onImportSrt,
   onTranscribe,
@@ -51,19 +61,39 @@ export default function Toolbar({
 
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-edge bg-surface/80 px-4 py-2.5 backdrop-blur">
-      <div className="mr-3 flex items-center gap-2.5">
+      <div className="mr-1 flex items-center gap-2.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-grad text-sm shadow-glow">
           🎬
         </div>
-        <div className="leading-tight">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold tracking-tight text-white">CutPilot</span>
-            <span className="chip border-accent/30 bg-accent/10 text-accent2">
-              Whisper · in-browser
-            </span>
-          </div>
-        </div>
+        <span className="font-semibold tracking-tight text-white">CutPilot</span>
       </div>
+
+      <button
+        className="btn px-2.5"
+        onClick={onOpenLibrary}
+        title="My Projects"
+        aria-label="My Projects"
+      >
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="5" height="4.5" rx="1" />
+          <rect x="9" y="3" width="5" height="4.5" rx="1" />
+          <rect x="2" y="9" width="5" height="4.5" rx="1" />
+          <rect x="9" y="9" width="5" height="4.5" rx="1" />
+        </svg>
+        {projectCount > 0 && <span className="text-[11px] text-muted">{projectCount}</span>}
+      </button>
+
+      {hasProject && (
+        <input
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          className="max-w-[180px] rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-sm font-medium text-white outline-none hover:border-edge focus:border-accent focus:bg-surface2"
+          title="Project name"
+          aria-label="Project name"
+        />
+      )}
+
+      <div className="mx-1 h-6 w-px bg-edge" />
 
       <button className="btn" onClick={() => videoInput.current?.click()}>
         <UploadIcon /> Upload

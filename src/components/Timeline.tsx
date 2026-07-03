@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { Cue } from "@/engine";
 import { MIN_CUE, fmtClock } from "@/lib/transcript";
+import { smpte } from "@/lib/store";
 
 /**
  * Editing timeline (CapCut-style): adaptive time ruler, audio waveform track,
@@ -79,10 +80,13 @@ export default function Timeline({
   const rulerRef = useRef<HTMLCanvasElement>(null);
   const waveRef = useRef<HTMLCanvasElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
-  const timeLabelRef = useRef<HTMLSpanElement>(null);
+  const timeLabelRef = useRef<HTMLButtonElement>(null);
 
   const [viewportW, setViewportW] = useState(0);
   const [pps, setPps] = useState<number | null>(null);
+  const [tc, setTc] = useState<"clock" | "smpte">("clock");
+  const tcRef = useRef(tc);
+  tcRef.current = tc;
   const [dragTemp, setDragTemp] = useState<{
     id: string;
     start: number;
@@ -297,9 +301,8 @@ export default function Timeline({
       const sc = scrollRef.current;
       if (ph && p) ph.style.left = `${t * p}px`;
       if (timeLabelRef.current) {
-        timeLabelRef.current.textContent = `${fmtClock(t)} / ${fmtClock(
-          durationRef.current
-        )}`;
+        const fmt = tcRef.current === "smpte" ? smpte : fmtClock;
+        timeLabelRef.current.textContent = `${fmt(t)} / ${fmt(durationRef.current)}`;
       }
       if (sc && p && playingRef.current && !dragRef.current) {
         const x = t * p;
@@ -480,9 +483,11 @@ export default function Timeline({
           <TrashIcon /> <span className="hidden sm:inline">Delete</span>
         </TlBtn>
 
-        <span
+        <button
           ref={timeLabelRef}
-          className="ml-2 font-mono text-[11px] tabular-nums text-muted"
+          onClick={() => setTc((v) => (v === "clock" ? "smpte" : "clock"))}
+          title={`Timecode: ${tc === "smpte" ? "SMPTE (click for m:ss)" : "m:ss (click for SMPTE)"}`}
+          className="ml-2 rounded-md px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted hover:bg-surface2 hover:text-slate-200"
         />
 
         <span className="ml-auto hidden text-[10px] text-muted/70 md:inline">

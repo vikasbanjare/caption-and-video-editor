@@ -29,18 +29,32 @@ import {
   type TranscribeProgress,
 } from "@/lib/transcribe-browser";
 import { computePeaks } from "@/lib/waveform";
+import {
+  initStore,
+  listProjects,
+  saveProject,
+  deleteProject,
+  loadProjectVideo,
+  getProject,
+  uid,
+  timeAgo,
+  type ProjectRecord,
+  type ProjectNote,
+} from "@/lib/store";
 import { buildStubSrt } from "@/server/transcription/stub";
 import Toolbar from "./Toolbar";
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
+import NotesPanel from "./NotesPanel";
 import StylePanel from "./StylePanel";
 import Timeline from "./Timeline";
+import ProjectLibrary from "./ProjectLibrary";
 
 /**
  * The editing studio: upload → real in-browser transcription (Whisper) →
- * editable transcript + full timeline (trim/move/split/insert, undo/redo,
- * keyboard shortcuts) → live styled preview. The same render engine drives
- * the preview and (later) the server burn-in export.
+ * editable transcript + full timeline → live styled preview → auto-saved local
+ * projects with frame notes (persistence + notes ported from the Daxio review
+ * tool). The same render engine drives the preview and the future export.
  */
 export default function Editor() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -59,11 +73,23 @@ export default function Editor() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [peaks, setPeaks] = useState<Float32Array | null>(null);
 
+  // ---- projects / persistence -----------------------------------------------
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [title, setTitle] = useState("Untitled");
+  const [createdAt, setCreatedAt] = useState(0);
+  const [thumb, setThumb] = useState<string | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
+
+  // ---- notes -----------------------------------------------------------------
+  const [notes, setNotes] = useState<ProjectNote[]>([]);
+  const [noteMode, setNoteMode] = useState(false);
+  const [leftTab, setLeftTab] = useState<"transcript" | "notes">("transcript");
+
   // shared mutable playback state (updated per animation frame, no re-render)
   const timeRef = useRef(0);
   const playingRef = useRef(false);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
-  // identity of the currently loaded file — guards async results from stale uploads
   const videoFileRef = useRef<File | null>(null);
   const styleRef = useRef(style);
   styleRef.current = style;
@@ -76,10 +102,6 @@ export default function Editor() {
   const lastActionRef = useRef("");
   const [historyTick, setHistoryTick] = useState(0);
 
-  /**
-   * Commit a cue mutation as one undo step. Consecutive commits with the same
-   * non-empty `coalesce` tag (e.g. typing in one cue) collapse into one step.
-   */
   const commit = useCallback(
     (next: Cue[] | ((prev: Cue[]) => Cue[]), coalesce = "") => {
       const prev = cuesRef.current;
@@ -116,9 +138,28 @@ export default function Editor() {
     setCuesRaw(future[0]);
   }, []);
 
-  void historyTick; // re-render trigger for canUndo/canRedo
+  const resetHistory = useCallback(() => {
+    pastRef.current = [];
+    futureRef.current = [];
+    lastActionRef.current = "";
+    setHistoryTick((t) => t + 1);
+  }, []);
+
+  void historyTick;
   const canUndo = pastRef.current.length > 0;
   const canRedo = futureRef.current.length > 0;
+
+  // ---- store init ------------------------------------------------------------
+  useEffect(() => {
+    let alive = true;
+    initStore().then(() => {
+      if (alive) setProjects(listProjects());
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const refreshProjects = useCallback(() => setProjects(listProjects()), []);
 
   // ---- lifecycle --------------------------------------------------------------
   useEffect(() => {
@@ -158,24 +199,160 @@ export default function Editor() {
     [language]
   );
 
+  // ---- autosave (debounced) --------------------------------------------------
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      // opportunistically capture a thumbnail once the frame is decodable
+      let t = thumb;
+      if (!t && videoElRef.current && videoElRef.current.readyState >= 2) {
+        t = captureThumb(videoElRef.current);
+        if (t) setThumb(t);
+      }
+      const rec: ProjectRecord = {
+        id: projectId,
+        title: title.trim() || "Untitled",
+        createdAt: createdAt || Date.now(),
+        updatedAt: Date.now(),
+        duration,
+        language,
+        style,
+        cues,
+        notes,
+        thumb: t,
+        video: videoFileRef.current
+          ? {
+              name: videoFileRef.current.name,
+              type: videoFileRef.current.type,
+              size: videoFileRef.current.size,
+            }
+          : null,
+      };
+      saveProject(rec)
+        .then(refreshProjects)
+        .catch(() => {});
+    }, 700);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [projectId, title, createdAt, duration, language, style, cues, notes, thumb, refreshProjects]);
+
   // ---- top-level actions --------------------------------------------------------
-  const handleUpload = useCallback((file: File) => {
+  const startProjectFromFile = useCallback(
+    (file: File) => {
+      const id = uid("p");
+      const now = Date.now();
+      setVideoUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
+      setVideoFile(file);
+      videoFileRef.current = file;
+      setProjectId(id);
+      setCreatedAt(now);
+      setTitle(file.name.replace(/\.[^.]+$/, "") || "Untitled");
+      setThumb(null);
+      setNotes([]);
+      setNoteMode(false);
+      setSelectedId(null);
+      setDuration(0);
+      resetHistory();
+      setCuesRaw([]);
+      setStatus(`Loaded ${file.name}. Hit Auto-transcribe.`);
+      // persist the media blob immediately so the project survives a reload
+      saveProject(
+        {
+          id,
+          title: file.name.replace(/\.[^.]+$/, "") || "Untitled",
+          createdAt: now,
+          updatedAt: now,
+          duration: 0,
+          language,
+          style,
+          cues: [],
+          notes: [],
+          thumb: null,
+          video: { name: file.name, type: file.type, size: file.size },
+        },
+        file
+      )
+        .then(refreshProjects)
+        .catch(() => {});
+    },
+    [language, style, resetHistory, refreshProjects]
+  );
+
+  const handleUpload = useCallback(
+    (file: File) => startProjectFromFile(file),
+    [startProjectFromFile]
+  );
+
+  const openProject = useCallback(
+    async (id: string) => {
+      const rec = getProject(id);
+      if (!rec) return;
+      const blob = await loadProjectVideo(id);
+      setShowLibrary(false);
+      if (!blob) {
+        setStatus("That project's video is missing (storage was cleared).");
+        return;
+      }
+      const file = new File([blob], rec.video?.name || "video", {
+        type: rec.video?.type || blob.type,
+      });
+      setVideoUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      setVideoFile(file);
+      videoFileRef.current = file;
+      setProjectId(rec.id);
+      setCreatedAt(rec.createdAt);
+      setTitle(rec.title);
+      setThumb(rec.thumb);
+      setNotes(rec.notes || []);
+      setStyle(rec.style);
+      setLanguage(rec.language);
+      setDuration(rec.duration);
+      setNoteMode(false);
+      setSelectedId(null);
+      resetHistory();
+      setCuesRaw(rec.cues || []);
+      setStatus(`Opened “${rec.title}”.`);
+    },
+    [resetHistory]
+  );
+
+  const newProject = useCallback(() => {
+    setShowLibrary(false);
     setVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+      return null;
     });
-    setVideoFile(file);
-    videoFileRef.current = file;
+    setVideoFile(null);
+    videoFileRef.current = null;
+    setProjectId(null);
+    setTitle("Untitled");
+    setThumb(null);
+    setNotes([]);
+    setNoteMode(false);
     setSelectedId(null);
-    // new media = new project: clear captions AND history so undo can't
-    // resurrect the previous video's cues
-    pastRef.current = [];
-    futureRef.current = [];
-    lastActionRef.current = "";
-    setHistoryTick((t) => t + 1);
+    setDuration(0);
+    resetHistory();
     setCuesRaw([]);
-    setStatus(`Loaded ${file.name}. Hit Auto-transcribe.`);
-  }, []);
+    setStatus("Upload a video to begin.");
+  }, [resetHistory]);
+
+  const handleDeleteProject = useCallback(
+    (id: string) => {
+      deleteProject(id);
+      refreshProjects();
+      if (id === projectId) newProject();
+    },
+    [projectId, newProject, refreshProjects]
+  );
 
   const handleTranscribe = useCallback(async () => {
     const file = videoFile;
@@ -184,8 +361,6 @@ export default function Editor() {
     setProgress({ phase: "decoding", label: "Reading audio…" });
     try {
       const words = await transcribeInBrowser(file, language, setProgress);
-      // a different video may have been loaded while Whisper was running —
-      // never commit a stale transcript onto the new clip
       if (videoFileRef.current !== file) {
         setStatus("Discarded a finished transcription for a previously loaded video.");
         return;
@@ -224,23 +399,18 @@ export default function Editor() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "captions.srt";
+    a.download = `${(title || "captions").replace(/[^\w-]+/g, "_")}.srt`;
     a.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [title]);
 
   // ---- style ----------------------------------------------------------------
-  // NOTE: state updaters must stay pure (StrictMode double-invokes them), so
-  // the regroup commit happens OUTSIDE setStyle, using styleRef for "prev".
   const handleStyleChange = useCallback(
     (patch: Partial<CaptionStyle>) => {
       const prev = styleRef.current;
       const next = { ...prev, ...patch };
       setStyle(next);
-      if (
-        patch.wordsPerCue !== undefined &&
-        patch.wordsPerCue !== prev.wordsPerCue
-      ) {
+      if (patch.wordsPerCue !== undefined && patch.wordsPerCue !== prev.wordsPerCue) {
         commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
         setSelectedId(null);
       }
@@ -253,8 +423,6 @@ export default function Editor() {
       const prev = styleRef.current;
       const next = styleFromPreset(id);
       setStyle(next);
-      // only regroup when the word count actually changes — a pure style swap
-      // must not discard manual splits/merges/trims on the timeline
       if (cuesRef.current.length && next.wordsPerCue !== prev.wordsPerCue) {
         commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
         setSelectedId(null);
@@ -265,7 +433,7 @@ export default function Editor() {
 
   // ---- playback / seeking -----------------------------------------------------
   const onSeek = useCallback((t: number) => {
-    timeRef.current = t; // keep playhead honest even before the video seeks
+    timeRef.current = t;
     setSeekTo({ t });
   }, []);
 
@@ -282,14 +450,8 @@ export default function Editor() {
       commit((cs) => updateCueText(cs, id, text), `text:${id}`),
     [commit]
   );
-  const onSplit = useCallback(
-    (id: string) => commit((cs) => splitCue(cs, id)),
-    [commit]
-  );
-  const onMerge = useCallback(
-    (id: string) => commit((cs) => mergeWithNext(cs, id)),
-    [commit]
-  );
+  const onSplit = useCallback((id: string) => commit((cs) => splitCue(cs, id)), [commit]);
+  const onMerge = useCallback((id: string) => commit((cs) => mergeWithNext(cs, id)), [commit]);
   const onDelete = useCallback(
     (id: string) => {
       commit((cs) => deleteCue(cs, id));
@@ -320,12 +482,45 @@ export default function Editor() {
     [commit]
   );
 
-  // drop the selection if its cue disappears (delete, split, regroup, undo…)
   useEffect(() => {
-    if (selectedId && !cues.some((c) => c.id === selectedId)) {
-      setSelectedId(null);
-    }
+    if (selectedId && !cues.some((c) => c.id === selectedId)) setSelectedId(null);
   }, [cues, selectedId]);
+
+  // ---- notes ------------------------------------------------------------------
+  const addNote = useCallback((t: number, x: number | null, y: number | null) => {
+    setNotes((ns) => [
+      ...ns,
+      { id: uid("n"), t, x, y, body: "", resolved: false, createdAt: Date.now() },
+    ]);
+    setLeftTab("notes");
+  }, []);
+  const onAddNoteAt = useCallback(
+    (x: number, y: number, t: number) => {
+      addNote(t, x, y);
+      setNoteMode(false);
+    },
+    [addNote]
+  );
+  const onAddNoteAtPlayhead = useCallback(
+    () => addNote(timeRef.current, null, null),
+    [addNote]
+  );
+  const editNote = useCallback(
+    (id: string, body: string) =>
+      setNotes((ns) => ns.map((n) => (n.id === id ? { ...n, body } : n))),
+    []
+  );
+  const toggleNoteResolved = useCallback(
+    (id: string) =>
+      setNotes((ns) =>
+        ns.map((n) => (n.id === id ? { ...n, resolved: !n.resolved } : n))
+      ),
+    []
+  );
+  const deleteNote = useCallback(
+    (id: string) => setNotes((ns) => ns.filter((n) => n.id !== id)),
+    []
+  );
 
   // ---- keyboard shortcuts -------------------------------------------------------
   const selectedIdRef = useRef(selectedId);
@@ -365,15 +560,11 @@ export default function Editor() {
         const step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowLeft" ? -1 : 1);
         onSeek(Math.max(0, timeRef.current + step));
       } else if (e.key === "," || e.key === ".") {
-        // frame-step (~1/30s), pausing for precision — Daxio-style , / .
         e.preventDefault();
         const v = videoElRef.current;
         if (v) {
           v.pause();
-          v.currentTime = Math.max(
-            0,
-            v.currentTime + (e.key === "," ? -1 : 1) / 30
-          );
+          v.currentTime = Math.max(0, v.currentTime + (e.key === "," ? -1 : 1) / 30);
         }
       }
     };
@@ -382,12 +573,16 @@ export default function Editor() {
   }, [undo, redo, togglePlay, onSplitAt, onDelete, onSeek]);
 
   const effectiveDuration = duration || transcriptDuration(cues);
+  const openNoteCount = notes.filter((n) => !n.resolved).length;
 
   return (
     <div className="flex h-screen flex-col">
       <Toolbar
         hasVideo={!!videoUrl}
         hasCues={cues.length > 0}
+        hasProject={!!projectId}
+        title={title}
+        projectCount={projects.length}
         busy={busy}
         language={language}
         status={status}
@@ -395,6 +590,8 @@ export default function Editor() {
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
+        onTitleChange={setTitle}
+        onOpenLibrary={() => setShowLibrary(true)}
         onUpload={handleUpload}
         onImportSrt={handleImportSrt}
         onTranscribe={handleTranscribe}
@@ -404,27 +601,44 @@ export default function Editor() {
       />
 
       {!videoUrl ? (
-        <Hero onUpload={handleUpload} />
+        <Hero onUpload={handleUpload} projects={projects} onOpen={openProject} />
       ) : (
         <>
           <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
             <section className="hidden min-h-0 flex-col border-r border-edge bg-surface/60 lg:flex">
-              <PanelHeader>
-                Transcript{" "}
-                {cues.length > 0 && <span className="text-muted">· {cues.length}</span>}
-              </PanelHeader>
+              <div className="flex gap-1 border-b border-edge px-2 py-1.5">
+                <PanelTab active={leftTab === "transcript"} onClick={() => setLeftTab("transcript")}>
+                  Transcript {cues.length > 0 && <Count n={cues.length} />}
+                </PanelTab>
+                <PanelTab active={leftTab === "notes"} onClick={() => setLeftTab("notes")}>
+                  Notes {openNoteCount > 0 && <Count n={openNoteCount} accent />}
+                </PanelTab>
+              </div>
               <div className="min-h-0 flex-1">
-                <TranscriptPanel
-                  cues={cues}
-                  activeId={activeId}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  onSeek={onSeek}
-                  onEditText={onEditText}
-                  onSplit={onSplit}
-                  onMerge={onMerge}
-                  onDelete={onDelete}
-                />
+                {leftTab === "transcript" ? (
+                  <TranscriptPanel
+                    cues={cues}
+                    activeId={activeId}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onSeek={onSeek}
+                    onEditText={onEditText}
+                    onSplit={onSplit}
+                    onMerge={onMerge}
+                    onDelete={onDelete}
+                  />
+                ) : (
+                  <NotesPanel
+                    notes={notes}
+                    noteMode={noteMode}
+                    onToggleMode={() => setNoteMode((m) => !m)}
+                    onSeek={onSeek}
+                    onEdit={editNote}
+                    onToggleResolved={toggleNoteResolved}
+                    onDelete={deleteNote}
+                    onAddAtPlayhead={onAddNoteAtPlayhead}
+                  />
+                )}
               </div>
             </section>
 
@@ -445,6 +659,10 @@ export default function Editor() {
                   onPlayingChange={(p) => {
                     playingRef.current = p;
                   }}
+                  notes={notes}
+                  noteMode={noteMode}
+                  onAddNote={onAddNoteAt}
+                  onSeekNote={onSeek}
                 />
               </div>
             </section>
@@ -452,16 +670,11 @@ export default function Editor() {
             <section className="hidden min-h-0 flex-col border-l border-edge bg-surface/60 lg:flex">
               <PanelHeader>Style</PanelHeader>
               <div className="min-h-0 flex-1">
-                <StylePanel
-                  style={style}
-                  onChange={handleStyleChange}
-                  onPreset={handlePreset}
-                />
+                <StylePanel style={style} onChange={handleStyleChange} onPreset={handlePreset} />
               </div>
             </section>
           </main>
 
-          {/* timeline */}
           <div className="shrink-0 border-t border-edge bg-surface/80">
             <Timeline
               cues={cues}
@@ -480,16 +693,36 @@ export default function Editor() {
           </div>
         </>
       )}
+
+      {showLibrary && (
+        <ProjectLibrary
+          projects={projects}
+          currentId={projectId}
+          onOpen={openProject}
+          onDelete={handleDeleteProject}
+          onNew={newProject}
+          onClose={() => setShowLibrary(false)}
+        />
+      )}
     </div>
   );
 }
 
-function Hero({ onUpload }: { onUpload: (f: File) => void }) {
+function Hero({
+  onUpload,
+  projects,
+  onOpen,
+}: {
+  onUpload: (f: File) => void;
+  projects: ProjectRecord[];
+  onOpen: (id: string) => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const recents = projects.slice(0, 4);
 
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center bg-hero-grad p-6">
+    <div className="scroll-thin flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-hero-grad p-6">
       <div className="w-full max-w-2xl text-center">
         <span className="chip mx-auto mb-5 w-fit border-accent/30 bg-accent/10 text-accent2">
           ✨ Real speech-to-text in your browser — no server, no API key
@@ -499,7 +732,7 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
         </h1>
         <p className="mx-auto mb-8 max-w-md text-sm text-muted">
           Upload a clip, auto-transcribe it locally with Whisper, then perfect the
-          timing on a full editing timeline with premium caption templates.
+          timing on a full editing timeline. Projects auto-save in your browser.
         </p>
 
         <label
@@ -527,9 +760,7 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
           </div>
           <div>
             <p className="font-medium text-white">Drop a video or audio file</p>
-            <p className="text-xs text-muted">
-              or click to browse · MP4, MOV, WEBM, MP3, WAV
-            </p>
+            <p className="text-xs text-muted">or click to browse · MP4, MOV, WEBM, MP3, WAV</p>
           </div>
           <input
             ref={input}
@@ -544,11 +775,41 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
           />
         </label>
 
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted">
+        {recents.length > 0 && (
+          <div className="mt-8 text-left">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Recent projects
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {recents.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onOpen(p.id)}
+                  className="group overflow-hidden rounded-xl border border-edge bg-surface text-left transition-all hover:-translate-y-0.5 hover:border-edge2"
+                >
+                  <div className="flex aspect-video items-center justify-center overflow-hidden bg-black">
+                    {p.thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.thumb} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-2xl opacity-40">🎬</span>
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <div className="truncate text-xs font-semibold text-slate-100">{p.title}</div>
+                    <div className="text-[10px] text-muted">{timeAgo(p.updatedAt)}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted">
           <span>🎙️ Whisper transcription</span>
           <span>🎬 Editing timeline</span>
-          <span>🎨 9 premium templates</span>
-          <span>↩️ Undo/redo</span>
+          <span>📌 Frame notes</span>
+          <span>💾 Auto-saved projects</span>
           <span>🌐 Hinglish</span>
         </div>
       </div>
@@ -556,10 +817,62 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
   );
 }
 
+/** Grab a small JPEG thumbnail from the current video frame. */
+function captureThumb(video: HTMLVideoElement): string | null {
+  try {
+    const w = 320;
+    const ratio = video.videoHeight && video.videoWidth
+      ? video.videoHeight / video.videoWidth
+      : 0.5625;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = Math.round(w * ratio);
+    const g = c.getContext("2d");
+    if (!g) return null;
+    g.drawImage(video, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.6);
+  } catch {
+    return null;
+  }
+}
+
 function PanelHeader({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center border-b border-edge px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
       {children}
     </div>
+  );
+}
+
+function PanelTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+        active ? "bg-surface3 text-white" : "text-muted hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Count({ n, accent }: { n: number; accent?: boolean }) {
+  return (
+    <span
+      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+        accent ? "bg-accent text-white" : "bg-surface2 text-muted"
+      }`}
+    >
+      {n}
+    </span>
   );
 }
