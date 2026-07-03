@@ -16,30 +16,37 @@ import {
 } from "@/engine";
 import {
   updateCueText,
+  retimeCue,
   splitCue,
+  splitCueAtTime,
   mergeWithNext,
   deleteCue,
+  insertCueAt,
 } from "@/lib/transcript";
 import {
   transcribeInBrowser,
+  decodeAudioFile,
   type TranscribeProgress,
 } from "@/lib/transcribe-browser";
+import { computePeaks } from "@/lib/waveform";
 import { buildStubSrt } from "@/server/transcription/stub";
 import Toolbar from "./Toolbar";
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
 import StylePanel from "./StylePanel";
+import Timeline from "./Timeline";
 
 /**
- * The editor: upload → real in-browser transcription (Whisper) → editable
- * transcript → live styled preview with premium templates. The same render
- * engine drives the preview and (later) the server burn-in export.
+ * The editing studio: upload → real in-browser transcription (Whisper) →
+ * editable transcript + full timeline (trim/move/split/insert, undo/redo,
+ * keyboard shortcuts) → live styled preview. The same render engine drives
+ * the preview and (later) the server burn-in export.
  */
 export default function Editor() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [duration, setDuration] = useState(0);
-  const [cues, setCues] = useState<Cue[]>([]);
+  const [cues, setCuesRaw] = useState<Cue[]>([]);
   const [style, setStyle] = useState<CaptionStyle>(() =>
     styleFromPreset(DEFAULT_PRESET.id)
   );
@@ -49,12 +56,87 @@ export default function Editor() {
   const [currentTime, setCurrentTime] = useState(0);
   const [seekTo, setSeekTo] = useState<{ t: number } | null>(null);
   const [progress, setProgress] = useState<TranscribeProgress | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [peaks, setPeaks] = useState<Float32Array | null>(null);
 
+  // shared mutable playback state (updated per animation frame, no re-render)
+  const timeRef = useRef(0);
+  const playingRef = useRef(false);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+
+  // ---- undo/redo history (refs + tick keep this StrictMode-safe) ------------
+  const cuesRef = useRef(cues);
+  cuesRef.current = cues;
+  const pastRef = useRef<Cue[][]>([]);
+  const futureRef = useRef<Cue[][]>([]);
+  const lastActionRef = useRef("");
+  const [historyTick, setHistoryTick] = useState(0);
+
+  /**
+   * Commit a cue mutation as one undo step. Consecutive commits with the same
+   * non-empty `coalesce` tag (e.g. typing in one cue) collapse into one step.
+   */
+  const commit = useCallback(
+    (next: Cue[] | ((prev: Cue[]) => Cue[]), coalesce = "") => {
+      const prev = cuesRef.current;
+      const value = typeof next === "function" ? next(prev) : next;
+      if (value === prev) return;
+      if (!coalesce || lastActionRef.current !== coalesce) {
+        pastRef.current = [...pastRef.current.slice(-79), prev];
+        futureRef.current = [];
+        setHistoryTick((t) => t + 1);
+      }
+      lastActionRef.current = coalesce;
+      setCuesRaw(value);
+    },
+    []
+  );
+
+  const undo = useCallback(() => {
+    const past = pastRef.current;
+    if (!past.length) return;
+    futureRef.current = [cuesRef.current, ...futureRef.current];
+    pastRef.current = past.slice(0, -1);
+    lastActionRef.current = "";
+    setHistoryTick((t) => t + 1);
+    setCuesRaw(past[past.length - 1]);
+  }, []);
+
+  const redo = useCallback(() => {
+    const future = futureRef.current;
+    if (!future.length) return;
+    pastRef.current = [...pastRef.current, cuesRef.current];
+    futureRef.current = future.slice(1);
+    lastActionRef.current = "";
+    setHistoryTick((t) => t + 1);
+    setCuesRaw(future[0]);
+  }, []);
+
+  void historyTick; // re-render trigger for canUndo/canRedo
+  const canUndo = pastRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
+  // ---- lifecycle --------------------------------------------------------------
   useEffect(() => {
     return () => {
       if (videoUrl) URL.revokeObjectURL(videoUrl);
     };
   }, [videoUrl]);
+
+  // decode audio for the timeline waveform whenever a new file is loaded
+  useEffect(() => {
+    let cancelled = false;
+    setPeaks(null);
+    if (!videoFile) return;
+    decodeAudioFile(videoFile)
+      .then((samples) => {
+        if (!cancelled) setPeaks(computePeaks(samples, 4000));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [videoFile]);
 
   const activeId = useMemo(
     () => activeCueAt(cues, currentTime)?.id ?? null,
@@ -72,12 +154,14 @@ export default function Editor() {
     [language]
   );
 
+  // ---- top-level actions --------------------------------------------------------
   const handleUpload = useCallback((file: File) => {
     setVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(file);
     });
     setVideoFile(file);
+    setSelectedId(null);
     setStatus(`Loaded ${file.name}. Hit Auto-transcribe.`);
   }, []);
 
@@ -88,7 +172,7 @@ export default function Editor() {
     try {
       const words = await transcribeInBrowser(videoFile, language, setProgress);
       if (words.length === 0) throw new Error("No speech detected in this clip.");
-      setCues(finalize(cuesFromWords(words), style));
+      commit(finalize(cuesFromWords(words), style));
       setStatus(`Transcribed ${words.length} words — all in your browser.`);
     } catch (err) {
       setStatus(`Transcription failed: ${(err as Error).message}`);
@@ -96,12 +180,12 @@ export default function Editor() {
       setBusy(false);
       setProgress(null);
     }
-  }, [videoFile, language, style, finalize]);
+  }, [videoFile, language, style, finalize, commit]);
 
   const handleLoadSample = useCallback(() => {
-    setCues(finalize(parseSRT(buildStubSrt(duration || 24, language)), style));
+    commit(finalize(parseSRT(buildStubSrt(duration || 24, language)), style));
     setStatus("Loaded sample captions (placeholder text, not from your video).");
-  }, [duration, language, style, finalize]);
+  }, [duration, language, style, finalize, commit]);
 
   const handleImportSrt = useCallback(
     (text: string) => {
@@ -110,48 +194,145 @@ export default function Editor() {
         setStatus("Could not parse that SRT — is it valid?");
         return;
       }
-      setCues(finalize(parsed, style));
+      commit(finalize(parsed, style));
       setStatus(`Imported ${parsed.length} cues.`);
     },
-    [style, finalize]
+    [style, finalize, commit]
   );
 
   const handleExportSrt = useCallback(() => {
-    const blob = new Blob([serializeSRT(cues)], { type: "text/plain" });
+    const blob = new Blob([serializeSRT(cuesRef.current)], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "captions.srt";
     a.click();
     URL.revokeObjectURL(url);
-  }, [cues]);
-
-  const handleStyleChange = useCallback((patch: Partial<CaptionStyle>) => {
-    setStyle((prev) => {
-      const next = { ...prev, ...patch };
-      if (patch.wordsPerCue !== undefined && patch.wordsPerCue !== prev.wordsPerCue) {
-        setCues((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
-      }
-      return next;
-    });
   }, []);
 
-  const handlePreset = useCallback((id: string) => {
-    const next = styleFromPreset(id);
-    setStyle(next);
-    setCues((cs) =>
-      cs.length ? applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)) : cs
-    );
-  }, []);
-
-  const onSeek = useCallback((t: number) => setSeekTo({ t }), []);
-  const onEditText = useCallback(
-    (id: string, text: string) => setCues((cs) => updateCueText(cs, id, text)),
-    []
+  // ---- style ----------------------------------------------------------------
+  const handleStyleChange = useCallback(
+    (patch: Partial<CaptionStyle>) => {
+      setStyle((prev) => {
+        const next = { ...prev, ...patch };
+        if (
+          patch.wordsPerCue !== undefined &&
+          patch.wordsPerCue !== prev.wordsPerCue
+        ) {
+          commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
+          setSelectedId(null);
+        }
+        return next;
+      });
+    },
+    [commit]
   );
-  const onSplit = useCallback((id: string) => setCues((cs) => splitCue(cs, id)), []);
-  const onMerge = useCallback((id: string) => setCues((cs) => mergeWithNext(cs, id)), []);
-  const onDelete = useCallback((id: string) => setCues((cs) => deleteCue(cs, id)), []);
+
+  const handlePreset = useCallback(
+    (id: string) => {
+      const next = styleFromPreset(id);
+      setStyle(next);
+      if (cuesRef.current.length) {
+        commit((cs) => applyKeywordHighlight(regroupCues(cs, next.wordsPerCue)));
+        setSelectedId(null);
+      }
+    },
+    [commit]
+  );
+
+  // ---- playback / seeking -----------------------------------------------------
+  const onSeek = useCallback((t: number) => {
+    timeRef.current = t; // keep playhead honest even before the video seeks
+    setSeekTo({ t });
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    const v = videoElRef.current;
+    if (!v) return;
+    if (v.paused) v.play();
+    else v.pause();
+  }, []);
+
+  // ---- cue editing --------------------------------------------------------------
+  const onEditText = useCallback(
+    (id: string, text: string) =>
+      commit((cs) => updateCueText(cs, id, text), `text:${id}`),
+    [commit]
+  );
+  const onSplit = useCallback(
+    (id: string) => commit((cs) => splitCue(cs, id)),
+    [commit]
+  );
+  const onMerge = useCallback(
+    (id: string) => commit((cs) => mergeWithNext(cs, id)),
+    [commit]
+  );
+  const onDelete = useCallback(
+    (id: string) => {
+      commit((cs) => deleteCue(cs, id));
+      setSelectedId((sel) => (sel === id ? null : sel));
+    },
+    [commit]
+  );
+  const onRetime = useCallback(
+    (id: string, start: number, end: number) =>
+      commit((cs) => retimeCue(cs, id, start, end)),
+    [commit]
+  );
+  const onSplitAt = useCallback(
+    (t: number) => commit((cs) => splitCueAtTime(cs, t)),
+    [commit]
+  );
+  const onAddAt = useCallback(
+    (t: number) => {
+      commit((cs) => insertCueAt(cs, t));
+      setStatus("Caption added — double-click its text in the transcript to edit.");
+    },
+    [commit]
+  );
+
+  // ---- keyboard shortcuts -------------------------------------------------------
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (mod && key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((mod && key === "z" && e.shiftKey) || (mod && key === "y")) {
+        e.preventDefault();
+        redo();
+      } else if (e.code === "Space") {
+        e.preventDefault();
+        togglePlay();
+      } else if (key === "s" && !mod) {
+        e.preventDefault();
+        onSplitAt(timeRef.current);
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedIdRef.current) {
+        e.preventDefault();
+        onDelete(selectedIdRef.current);
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowLeft" ? -1 : 1);
+        onSeek(Math.max(0, timeRef.current + step));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo, togglePlay, onSplitAt, onDelete, onSeek]);
 
   const effectiveDuration = duration || transcriptDuration(cues);
 
@@ -163,6 +344,10 @@ export default function Editor() {
         busy={busy}
         language={language}
         status={status}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
         onUpload={handleUpload}
         onImportSrt={handleImportSrt}
         onTranscribe={handleTranscribe}
@@ -174,47 +359,79 @@ export default function Editor() {
       {!videoUrl ? (
         <Hero onUpload={handleUpload} />
       ) : (
-        <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[340px_1fr_340px]">
-          <section className="hidden min-h-0 flex-col border-r border-edge bg-surface/60 lg:flex">
-            <PanelHeader>
-              Transcript {cues.length > 0 && <span className="text-muted">· {cues.length}</span>}
-            </PanelHeader>
-            <div className="min-h-0 flex-1">
-              <TranscriptPanel
-                cues={cues}
-                activeId={activeId}
-                onSeek={onSeek}
-                onEditText={onEditText}
-                onSplit={onSplit}
-                onMerge={onMerge}
-                onDelete={onDelete}
-              />
-            </div>
-          </section>
+        <>
+          <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
+            <section className="hidden min-h-0 flex-col border-r border-edge bg-surface/60 lg:flex">
+              <PanelHeader>
+                Transcript{" "}
+                {cues.length > 0 && <span className="text-muted">· {cues.length}</span>}
+              </PanelHeader>
+              <div className="min-h-0 flex-1">
+                <TranscriptPanel
+                  cues={cues}
+                  activeId={activeId}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onSeek={onSeek}
+                  onEditText={onEditText}
+                  onSplit={onSplit}
+                  onMerge={onMerge}
+                  onDelete={onDelete}
+                />
+              </div>
+            </section>
 
-          <section className="flex min-h-0 flex-col p-5">
-            <VideoStage
-              videoUrl={videoUrl}
+            <section className="flex min-h-0 flex-col p-4 pb-2">
+              <div className="min-h-0 flex-1">
+                <VideoStage
+                  videoUrl={videoUrl}
+                  cues={cues}
+                  style={style}
+                  seekTo={seekTo}
+                  progress={progress}
+                  onTime={setCurrentTime}
+                  onDuration={setDuration}
+                  timeRef={timeRef}
+                  onVideoEl={(el) => {
+                    videoElRef.current = el;
+                  }}
+                  onPlayingChange={(p) => {
+                    playingRef.current = p;
+                  }}
+                />
+              </div>
+            </section>
+
+            <section className="hidden min-h-0 flex-col border-l border-edge bg-surface/60 lg:flex">
+              <PanelHeader>Style</PanelHeader>
+              <div className="min-h-0 flex-1">
+                <StylePanel
+                  style={style}
+                  onChange={handleStyleChange}
+                  onPreset={handlePreset}
+                />
+              </div>
+            </section>
+          </main>
+
+          {/* timeline */}
+          <div className="shrink-0 border-t border-edge bg-surface/80">
+            <Timeline
               cues={cues}
-              style={style}
-              seekTo={seekTo}
-              progress={progress}
-              onTime={setCurrentTime}
-              onDuration={setDuration}
+              duration={effectiveDuration}
+              selectedId={selectedId}
+              timeRef={timeRef}
+              playingRef={playingRef}
+              peaks={peaks}
+              onSelect={setSelectedId}
+              onSeek={onSeek}
+              onRetime={onRetime}
+              onSplitAt={onSplitAt}
+              onDeleteCue={onDelete}
+              onAddAt={onAddAt}
             />
-            <p className="mt-3 text-center text-[11px] text-muted">
-              Live preview · {effectiveDuration ? `${effectiveDuration.toFixed(1)}s` : "—"} ·
-              the preview is exactly what an export would burn in
-            </p>
-          </section>
-
-          <section className="hidden min-h-0 flex-col border-l border-edge bg-surface/60 lg:flex">
-            <PanelHeader>Style</PanelHeader>
-            <div className="min-h-0 flex-1">
-              <StylePanel style={style} onChange={handleStyleChange} onPreset={handlePreset} />
-            </div>
-          </section>
-        </main>
+          </div>
+        </>
       )}
     </div>
   );
@@ -234,8 +451,8 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
           Caption your videos beautifully
         </h1>
         <p className="mx-auto mb-8 max-w-md text-sm text-muted">
-          Upload a clip, auto-transcribe it locally with Whisper, then style
-          animated captions with premium templates.
+          Upload a clip, auto-transcribe it locally with Whisper, then perfect the
+          timing on a full editing timeline with premium caption templates.
         </p>
 
         <label
@@ -263,7 +480,9 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
           </div>
           <div>
             <p className="font-medium text-white">Drop a video or audio file</p>
-            <p className="text-xs text-muted">or click to browse · MP4, MOV, WEBM, MP3, WAV</p>
+            <p className="text-xs text-muted">
+              or click to browse · MP4, MOV, WEBM, MP3, WAV
+            </p>
           </div>
           <input
             ref={input}
@@ -280,9 +499,10 @@ function Hero({ onUpload }: { onUpload: (f: File) => void }) {
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted">
           <span>🎙️ Whisper transcription</span>
+          <span>🎬 Editing timeline</span>
           <span>🎨 9 premium templates</span>
-          <span>✏️ Editable transcript</span>
-          <span>🌐 Hinglish romanization</span>
+          <span>↩️ Undo/redo</span>
+          <span>🌐 Hinglish</span>
         </div>
       </div>
     </div>

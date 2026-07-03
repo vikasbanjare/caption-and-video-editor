@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import type { Cue, CaptionStyle } from "@/engine";
 import { activeCueAt, renderFrame } from "@/engine";
 import { fmtClock } from "@/lib/transcript";
@@ -14,6 +20,11 @@ interface Props {
   progress: TranscribeProgress | null;
   onTime: (t: number) => void;
   onDuration: (d: number) => void;
+  /** written every animation frame — timeline playhead reads it without re-rendering */
+  timeRef?: MutableRefObject<number>;
+  /** gives the parent direct access to the <video> (play/pause, keyboard) */
+  onVideoEl?: (el: HTMLVideoElement | null) => void;
+  onPlayingChange?: (playing: boolean) => void;
 }
 
 /**
@@ -28,8 +39,11 @@ export default function VideoStage({
   progress,
   onTime,
   onDuration,
+  timeRef,
+  onVideoEl,
+  onPlayingChange,
 }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -51,6 +65,7 @@ export default function VideoStage({
         if (ctx) {
           fitCanvas(canvas, video);
           const t = video.currentTime;
+          if (timeRef) timeRef.current = t;
           renderFrame({
             ctx,
             cue: activeCueAt(cuesRef.current, t),
@@ -70,7 +85,7 @@ export default function VideoStage({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [onTime]);
+  }, [onTime, timeRef]);
 
   useEffect(() => {
     if (!seekTo || !videoRef.current) return;
@@ -97,7 +112,10 @@ export default function VideoStage({
         {/* phone-style frame */}
         <div className="relative flex h-full items-center justify-center overflow-hidden rounded-[22px] border border-edge2 bg-black shadow-[0_20px_60px_-20px_rgba(0,0,0,0.8)]">
           <video
-            ref={videoRef}
+            ref={(el) => {
+              videoRef.current = el;
+              onVideoEl?.(el);
+            }}
             src={videoUrl}
             className="block max-h-full max-w-full"
             playsInline
@@ -106,8 +124,14 @@ export default function VideoStage({
               setDuration(d);
               onDuration(d);
             }}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
+            onPlay={() => {
+              setPlaying(true);
+              onPlayingChange?.(true);
+            }}
+            onPause={() => {
+              setPlaying(false);
+              onPlayingChange?.(false);
+            }}
             onClick={togglePlay}
           />
           <canvas ref={canvasRef} className="pointer-events-none absolute" />

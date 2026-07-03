@@ -7,6 +7,8 @@ import { fmtClock } from "@/lib/transcript";
 interface Props {
   cues: Cue[];
   activeId: string | null;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
   onSeek: (t: number) => void;
   onEditText: (id: string, text: string) => void;
   onSplit: (id: string) => void;
@@ -18,6 +20,8 @@ interface Props {
 export default function TranscriptPanel({
   cues,
   activeId,
+  selectedId,
+  onSelect,
   onSeek,
   onEditText,
   onSplit,
@@ -47,15 +51,17 @@ export default function TranscriptPanel({
     <div className="scroll-thin h-full overflow-y-auto p-2.5">
       {cues.map((c, i) => {
         const active = c.id === activeId;
+        const selected = c.id === selectedId;
         return (
           <div
             key={c.id}
             ref={active ? activeRef : undefined}
+            onClick={() => onSelect(c.id)}
             className={`group mb-2 rounded-xl border p-2.5 transition-all ${
               active
                 ? "border-accent/60 bg-accent/10"
                 : "border-edge bg-surface2 hover:border-edge2"
-            }`}
+            } ${selected ? "ring-1 ring-accent/70" : ""}`}
           >
             <div className="mb-1 flex items-center justify-between">
               <button

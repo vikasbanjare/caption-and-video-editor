@@ -23,7 +23,7 @@ export async function transcribeInBrowser(
   onProgress: (p: TranscribeProgress) => void
 ): Promise<Word[]> {
   onProgress({ phase: "decoding", label: "Reading audio from your video…" });
-  const audio = await decodeAudio(file);
+  const audio = await decodeAudioFile(file);
 
   return new Promise<Word[]>((resolve, reject) => {
     const worker = new Worker(
@@ -71,7 +71,11 @@ export async function transcribeInBrowser(
   });
 }
 
-async function decodeAudio(file: File): Promise<Float32Array> {
+/**
+ * Decode a media file's audio track to mono 16 kHz PCM via the Web Audio API.
+ * Shared by the Whisper pipeline and the timeline's waveform rendering.
+ */
+export async function decodeAudioFile(file: File): Promise<Float32Array> {
   const arr = await file.arrayBuffer();
   const AC: typeof AudioContext =
     window.AudioContext ||

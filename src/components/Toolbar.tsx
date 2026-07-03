@@ -8,6 +8,10 @@ interface Props {
   busy: boolean;
   language: string;
   status: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   onUpload: (file: File) => void;
   onImportSrt: (text: string) => void;
   onTranscribe: () => void;
@@ -31,6 +35,10 @@ export default function Toolbar({
   busy,
   language,
   status,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   onUpload,
   onImportSrt,
   onTranscribe,
@@ -95,6 +103,33 @@ export default function Toolbar({
 
       <button className="btn" onClick={onLoadSample} disabled={busy}>
         Sample
+      </button>
+
+      <div className="mx-1 h-6 w-px bg-edge" />
+
+      <button
+        className="btn px-2.5"
+        onClick={onUndo}
+        disabled={!canUndo}
+        title="Undo (Ctrl+Z)"
+        aria-label="Undo"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6.5 3 3 6.5 6.5 10" />
+          <path d="M3 6.5h6a4 4 0 0 1 0 8H7" />
+        </svg>
+      </button>
+      <button
+        className="btn px-2.5"
+        onClick={onRedo}
+        disabled={!canRedo}
+        title="Redo (Ctrl+Shift+Z)"
+        aria-label="Redo"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.5 3 13 6.5 9.5 10" />
+          <path d="M13 6.5H7a4 4 0 0 0 0 8h2" />
+        </svg>
       </button>
 
       <div className="mx-1 h-6 w-px bg-edge" />

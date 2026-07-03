@@ -1,20 +1,27 @@
-# CutPilot Web — Phase 1
+# CutPilot — AI Caption Studio
 
-Upload a video → auto-transcribe → style animated captions → preview them live,
-exactly as they'll export. This repo is **Phase 1** of [`WEBSAASPLAN.md`](./WEBSAASPLAN.md):
-the editor MVP. Transcription is a **stub** for now; GPU transcription, server
+Upload a video → **real Whisper transcription in your browser** → perfect the
+timing on a **full editing timeline** → style animated captions with premium
+templates, previewed live exactly as they'll export.
+
+**Live demo:** https://vikasbanjare.github.io/caption-and-video-editor/
+
+This repo implements Phases 1–2 of [`WEBSAASPLAN.md`](./WEBSAASPLAN.md); server
 burn-in export, accounts, and billing are later phases.
 
 ## What's here
 
 | Area | Status |
 | --- | --- |
-| Caption engine (`src/engine`) | ✅ SRT parse/serialize, word splitting, regroup, animation timing, keyword highlight, **Hinglish** romanization, canvas renderer |
+| Transcription | ✅ **Whisper runs in your browser** (transformers.js in a Web Worker — no server, no API key, word-level timestamps). Server-side Deepgram/AssemblyAI also supported via `DEEPGRAM_API_KEY` / `ASSEMBLYAI_API_KEY`. |
+| Editing timeline | ✅ time ruler, **audio waveform**, caption blocks — drag to move, drag edges to trim (snapping + non-overlap clamps), split at playhead, insert caption, click-to-seek scrubbing, zoom (buttons / ctrl+wheel), playback autoscroll |
+| Undo / redo | ✅ full history for every edit (toolbar buttons + Ctrl+Z / Ctrl+Shift+Z), text edits coalesced |
+| Keyboard shortcuts | ✅ Space play/pause · S split at playhead · Delete remove selected · ←/→ nudge (Shift = 1s) |
+| Caption engine (`src/engine`) | ✅ SRT parse/serialize, word timing, regroup, animations (pop/bounce/karaoke/word-by-word/slide/fade), keyword highlight, **Hinglish** romanization, canvas renderer |
+| Templates | ✅ 9 premium presets (Hormozi boxed-keyword, Beasty, Karaoke, Neon glow, Pop Pink, Bebas, TikTok, Clean, Subtitle) rendered live in a visual gallery |
+| Editable transcript | ✅ edit text, split, merge, delete, select, click-to-seek — synced with the timeline |
 | Live preview | ✅ `<canvas>` overlaid on `<video>`, driven by the same `renderFrame` the export worker will use |
-| Editable transcript | ✅ edit text, split, merge, delete, click-to-seek |
-| Style panel | ✅ presets, animation, fonts, colors, position, words/cue, outline, shadow, background |
-| Transcription | ✅ provider-agnostic: **Deepgram** (real word-level ASR) when `DEEPGRAM_API_KEY` is set, else a built-in **stub** sample — same `/api/transcribe` contract either way |
-| Export (burn-in MP4) | ⛔ Phase 3 |
+| Export SRT | ✅ · Export burned-in MP4 | ⛔ Phase 3 |
 | Auth / billing | ⛔ Phases 4–5 |
 
 ## The engine is the moat
@@ -26,61 +33,49 @@ written against the standard `CanvasRenderingContext2D` API, so a server worker
 can drive it with `node-canvas` / `skia-canvas` unchanged.
 
 ```
-src/engine/
-  types.ts      # shared Cue / CaptionStyle JSON schema (Phase 0 lock)
-  captions.ts   # SRT parse/serialize, words, regroup, active-cue, highlight
-  render.ts     # canvas renderer (browser + server)
-  romanize.ts   # Devanagari → Latin (Hinglish)
-  presets.ts    # style preset catalog
+src/engine/          # pure caption engine (browser + server)
+src/components/      # editor UI: Toolbar, VideoStage, Timeline, panels
+src/lib/transcript.ts        # cue edit ops (retime/split/merge/insert) — word-timing preserving
+src/lib/transcribe-browser.ts# Web Audio decode → Whisper worker → word cues
+src/workers/whisper.worker.js# transformers.js (CDN-loaded) speech recognition
+src/server/transcription/    # optional server ASR providers (Deepgram/AssemblyAI/stub)
 ```
 
 ## Run it
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000  → redirects to /editor
+npm run dev      # http://localhost:3000
 ```
 
 ### …or in GitHub Codespaces (no local setup)
 
 Open the repo → **Code ▸ Codespaces ▸ Create codespace**. The included
-`.devcontainer` installs dependencies and starts `npm run dev` automatically;
-when port 3000 forwards, open the preview. For real ASR, add a Codespaces secret
-(`DEEPGRAM_API_KEY` or `ASSEMBLYAI_API_KEY`).
+`.devcontainer` installs dependencies and starts `npm run dev` automatically.
 
-Then: **Upload video** → **Auto-transcribe** (stub) → edit the transcript →
-pick a preset / tweak the style → scrub the preview.
+Then: **Upload** a clip → **Auto-transcribe** (first run downloads the Whisper
+model once) → fix words in the transcript → drag blocks on the timeline to
+perfect timing → pick a template → **Export SRT**.
 
-No video handy? Click **Import SRT** with any `.srt` file, or transcribe with
-language set to **Hindi → Hinglish** to see Devanagari romanized.
+No video handy? **Sample** loads placeholder captions; **Import SRT** works too.
+Set language to **Hindi → Hinglish** to see Devanagari romanized.
 
-## Real transcription (Phase 2)
+## Server-side transcription (optional)
 
-With no key configured, `/api/transcribe` serves a stub sample transcript so the
-editor works out of the box. Set a key to switch to real, word-level ASR — the
-client and engine don't change (`captions.js` re-groups the provider's true word
-timestamps into cues, so karaoke sync is exact):
+The in-browser Whisper path needs nothing. For server-side ASR instead, set one
+key — the UI and engine don't change:
 
 ```bash
 cp .env.example .env.local
-# edit .env.local — set ONE of:
 DEEPGRAM_API_KEY=dg_xxx          # https://console.deepgram.com/
 # ASSEMBLYAI_API_KEY=aai_xxx     # https://www.assemblyai.com/
-# DEEPGRAM_MODEL=nova-2          # optional
 ```
 
-Architecture (`src/server/transcription`): a `Provider` interface with pluggable
-backends — `stub` (default), `deepgram` (single request), and `assemblyai`
-(upload → poll). Priority is Deepgram → AssemblyAI → stub. Adding self-hosted
-WhisperX (plan §4.3) is just another file implementing the same interface;
-`parse.ts` holds the (unit-tested) response parsers. `GET /api/transcribe`
-reports which backend is active — the UI shows it as an `ASR:` badge and uploads
-media only when a real provider needs it.
+## CI / Deploy
 
-## CI
-
-`.github/workflows/ci.yml` runs typecheck, lint, tests, and build on every push
-to `main` and every PR.
+- `.github/workflows/ci.yml` — typecheck, lint, tests, build on every PR/push.
+- `.github/workflows/pages.yml` — deploys the static browser-only build to
+  GitHub Pages (everything works there, including in-browser Whisper).
 
 ## Develop
 
@@ -89,13 +84,11 @@ npm run dev        # Next.js dev server
 npm run build      # production build
 npm run typecheck  # tsc --noEmit
 npm run lint       # next lint
-npm test           # vitest — engine unit tests
+npm test           # vitest — engine + editing-core unit tests
 ```
 
 ## Next phases (see WEBSAASPLAN.md)
 
-- **Phase 2** — ✅ real ASR behind `/api/transcribe` (Deepgram + AssemblyAI).
-  Next: queue + progress for long videos, audio extraction, WhisperX backend.
-- **Phase 3** — server render worker: run `renderFrame` headless + ffmpeg
-  burn-in → MP4.
+- **Phase 3** — burn-in export → MP4 (client-side MediaRecorder first, then a
+  server render worker: `renderFrame` headless + ffmpeg).
 - **Phase 4–5** — accounts, projects, storage lifecycle, Stripe + credits.
