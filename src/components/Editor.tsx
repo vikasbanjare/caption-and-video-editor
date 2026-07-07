@@ -48,6 +48,7 @@ import {
   type ProjectNote,
 } from "@/lib/store";
 import { buildStubSrt } from "@/server/transcription/stub";
+import { exportBurnIn, downloadBlob, isExportSupported } from "@/lib/export";
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
 import NotesPanel from "./NotesPanel";
@@ -113,6 +114,9 @@ export default function Editor() {
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [noteMode, setNoteMode] = useState(false);
   const [leftTab, setLeftTab] = useState<"transcript" | "notes">("transcript");
+
+  // ---- video export (burn-in) ------------------------------------------------
+  const [exportPct, setExportPct] = useState<number | null>(null);
 
   // shared mutable playback state (updated per animation frame, no re-render)
   const timeRef = useRef(0);
@@ -457,6 +461,33 @@ export default function Editor() {
     a.click();
     URL.revokeObjectURL(url);
   }, [title]);
+
+  const handleExportVideo = useCallback(async () => {
+    if (!videoUrl || exportPct !== null) return;
+    if (!isExportSupported()) {
+      setStatus("This browser can't record video — try Chrome, Edge or Safari.");
+      return;
+    }
+    const dur = transcriptDuration(cuesRef.current) || duration || 0;
+    setExportPct(0);
+    setStatus("Rendering video with burned-in captions… (records in real time)");
+    try {
+      const { blob, ext } = await exportBurnIn({
+        videoUrl,
+        cues: cuesRef.current,
+        style: styleRef.current,
+        duration: dur,
+        onProgress: (f) => setExportPct(f),
+      });
+      const base = (title || "pulse-captions").replace(/[^\w-]+/g, "_");
+      downloadBlob(blob, `${base}.${ext}`);
+      setStatus(`Exported ${base}.${ext} (${(blob.size / 1e6).toFixed(1)} MB).`);
+    } catch (err) {
+      setStatus(`Export failed: ${(err as Error).message}`);
+    } finally {
+      setExportPct(null);
+    }
+  }, [videoUrl, duration, title, exportPct]);
 
   // ---- style ----------------------------------------------------------------
   const handleStyleChange = useCallback(
@@ -870,15 +901,35 @@ export default function Editor() {
                 {cues.length} cues · {effectiveDuration.toFixed(1)}s
               </p>
               <div className="mt-5 space-y-2">
-                <button className="btn btn-primary w-full justify-center" onClick={handleExportSrt} disabled={!cues.length}>
-                  Export .srt
+                <button
+                  className="btn btn-primary w-full justify-center"
+                  onClick={handleExportVideo}
+                  disabled={!cues.length || exportPct !== null}
+                >
+                  {exportPct !== null
+                    ? `Rendering… ${Math.round(exportPct * 100)}%`
+                    : "Export video · captions burned in"}
                 </button>
-                <button className="btn w-full cursor-not-allowed justify-center opacity-50" disabled>
-                  Burn-in .mp4 — next build
+                {exportPct !== null && (
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface3">
+                    <div
+                      className="h-full bg-grad-accent transition-all"
+                      style={{ width: `${Math.round(exportPct * 100)}%` }}
+                    />
+                  </div>
+                )}
+                <button
+                  className="btn w-full justify-center"
+                  onClick={handleExportSrt}
+                  disabled={!cues.length || exportPct !== null}
+                >
+                  Export .srt (captions only)
                 </button>
               </div>
               <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
-                The preview is pixel-identical to the eventual burn-in — the same engine renders both.
+                Burn-in renders in your browser in real time — the same engine
+                as the preview, so what you see is what you get. Saves as MP4
+                where supported, otherwise WebM.
               </p>
             </div>
           </div>
