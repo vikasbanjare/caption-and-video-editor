@@ -6,14 +6,15 @@
  * at the bottom, always visible, and reframes the whole app per craft.
  */
 
-export type Stage = "ingest" | "script" | "cut" | "type" | "export";
+export type Stage = "ingest" | "script" | "cut" | "color" | "type" | "export";
 
 const STAGES: { id: Stage; n: string; label: string }[] = [
   { id: "ingest", n: "01", label: "Ingest" },
   { id: "script", n: "02", label: "Script" },
   { id: "cut", n: "03", label: "Cut" },
-  { id: "type", n: "04", label: "Type" },
-  { id: "export", n: "05", label: "Export" },
+  { id: "color", n: "04", label: "Color" },
+  { id: "type", n: "05", label: "Type" },
+  { id: "export", n: "06", label: "Export" },
 ];
 
 export default function StageRail({

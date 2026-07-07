@@ -19,6 +19,8 @@ export interface ExportOptions {
   style: CaptionStyle;
   /** total duration in seconds (used to stop; robust to webm Infinity-duration) */
   duration: number;
+  /** CSS/canvas filter string for the color grade (applied to the video frame) */
+  filter?: string;
   fps?: number;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -59,6 +61,7 @@ export async function exportBurnIn({
   cues,
   style,
   duration,
+  filter,
   fps = 30,
   onProgress,
   signal,
@@ -152,7 +155,10 @@ export async function exportBurnIn({
 
   const draw = () => {
     if (finished) return;
+    // grade the video frame (captions stay ungraded — drawn after filter reset)
+    ctx.filter = filter && filter !== "none" ? filter : "none";
     ctx.drawImage(video, 0, 0, W, H);
+    ctx.filter = "none";
     const t = video.currentTime;
     const cue = activeCueAt(cues, t);
     renderFrame({ ctx: capCtx, cue, style, time: t, width: W, height: H });

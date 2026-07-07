@@ -49,6 +49,13 @@ import {
 } from "@/lib/store";
 import { buildStubSrt } from "@/server/transcription/stub";
 import { exportBurnIn, downloadBlob, isExportSupported } from "@/lib/export";
+import {
+  DEFAULT_GRADE,
+  gradeFilter,
+  isGradeActive,
+  LOOKS,
+  type ColorGrade,
+} from "@/lib/grade";
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
 import NotesPanel from "./NotesPanel";
@@ -117,6 +124,15 @@ export default function Editor() {
 
   // ---- video export (burn-in) ------------------------------------------------
   const [exportPct, setExportPct] = useState<number | null>(null);
+
+  // ---- color grade -----------------------------------------------------------
+  const [grade, setGrade] = useState<ColorGrade>(DEFAULT_GRADE);
+  const gradeRef = useRef(grade);
+  gradeRef.current = grade;
+  const patchGrade = useCallback(
+    (p: Partial<ColorGrade>) => setGrade((g) => ({ ...g, ...p })),
+    []
+  );
 
   // shared mutable playback state (updated per animation frame, no re-render)
   const timeRef = useRef(0);
@@ -477,6 +493,9 @@ export default function Editor() {
         cues: cuesRef.current,
         style: styleRef.current,
         duration: dur,
+        filter: isGradeActive(gradeRef.current)
+          ? gradeFilter(gradeRef.current)
+          : undefined,
         onProgress: (f) => setExportPct(f),
       });
       const base = (title || "pulse-captions").replace(/[^\w-]+/g, "_");
@@ -689,6 +708,7 @@ export default function Editor() {
       onSeekNote={onSeek}
       onStyleChange={handleStyleChange}
       safeZones={safeZones}
+      videoFilter={isGradeActive(grade) ? gradeFilter(grade) : undefined}
     />
   ) : null;
 
@@ -858,6 +878,52 @@ export default function Editor() {
           </div>
         )}
 
+        {stage === "color" && hasMedia && (
+          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1fr_340px]">
+            <section className="flex min-h-0 flex-col p-4">
+              <div className="min-h-0 flex-1">{monitor}</div>
+            </section>
+            <aside className="hidden min-h-0 flex-col border-l border-edge lg:flex">
+              <StageHead title="Color" hint="Grade the picture — baked into export">
+                <button
+                  onClick={() => setGrade(DEFAULT_GRADE)}
+                  className="rounded-sm px-2 py-1 font-mono text-[10px] uppercase tracking-label text-muted hover:text-ink"
+                  title="Reset the grade"
+                >
+                  Reset
+                </button>
+              </StageHead>
+              <div className="scroll-thin min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+                <div>
+                  <span className="label">Look</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {LOOKS.map((l) => (
+                      <button
+                        key={l.id}
+                        onClick={() => patchGrade({ look: l.id })}
+                        className={`rounded-xl border px-2 py-2 text-xs font-semibold transition-colors ${
+                          grade.look === l.id
+                            ? "border-transparent bg-grad-accent text-white shadow-glow-sm"
+                            : "border-edge bg-surface2 text-muted hover:text-ink"
+                        }`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <GradeSlider label="Exposure" value={grade.exposure} onChange={(v) => patchGrade({ exposure: v })} />
+                <GradeSlider label="Contrast" value={grade.contrast} onChange={(v) => patchGrade({ contrast: v })} />
+                <GradeSlider label="Saturation" value={grade.saturation} onChange={(v) => patchGrade({ saturation: v })} />
+                <p className="font-mono text-[10px] leading-relaxed text-muted">
+                  The grade renders live here and burns into the exported video —
+                  same engine, so what you see is what ships.
+                </p>
+              </div>
+            </aside>
+          </div>
+        )}
+
         {stage === "type" && hasMedia && (
           <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1fr_360px]">
             <section className="flex min-h-0 flex-col p-4">
@@ -971,6 +1037,38 @@ function captureThumb(video: HTMLVideoElement): string | null {
   } catch {
     return null;
   }
+}
+
+function GradeSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 flex items-center justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-label text-muted">
+          {label}
+        </span>
+        <span className="font-mono text-[10px] tabular-nums text-muted">
+          {value > 0 ? `+${value}` : value}
+        </span>
+      </span>
+      <input
+        type="range"
+        min={-100}
+        max={100}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full cursor-pointer"
+      />
+    </label>
+  );
 }
 
 function StageHead({

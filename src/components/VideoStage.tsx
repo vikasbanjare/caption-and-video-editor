@@ -35,6 +35,8 @@ interface Props {
   onStyleChange?: (patch: Partial<CaptionStyle>) => void;
   /** draw title-safe + social-UI safe-zone guides */
   safeZones?: boolean;
+  /** CSS/canvas filter string for the live color grade (baked into export too) */
+  videoFilter?: string;
 }
 
 /**
@@ -58,6 +60,7 @@ export default function VideoStage({
   onSeekNote,
   onStyleChange,
   safeZones,
+  videoFilter,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -211,6 +214,7 @@ export default function VideoStage({
             }}
             src={videoUrl}
             className={`block max-h-full max-w-full ${noteMode ? "cursor-crosshair" : ""}`}
+            style={videoFilter ? { filter: videoFilter } : undefined}
             playsInline
             onLoadedMetadata={(e) => {
               const d = e.currentTarget.duration || 0;
