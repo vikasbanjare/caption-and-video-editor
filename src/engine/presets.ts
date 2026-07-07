@@ -104,6 +104,40 @@ function mapAnim(anim?: string): AnimationKind {
   }
 }
 
+// Defaults for the extended customization fields — presets omit these, so they
+// spread in first and any preset-set field below overrides. Keeps all 97
+// templates rendering exactly as before while unlocking the full control set.
+const EXTENDED_DEFAULTS = {
+  italic: false,
+  textTransform: "none" as const,
+  textAlign: "center" as const,
+  underline: false,
+  strikethrough: false,
+  fillGradientDir: "v" as const,
+  textOpacity: 1,
+  strokeOpacity: 1,
+  strokes: [] as CaptionStyle["strokes"],
+  shadowOffsetX: 0,
+  shadowOffsetY: 0.045,
+  longShadow: 0,
+  longShadowAngle: 135,
+  longShadowColor: "",
+  glowRadius: 0,
+  activeBounce: 0,
+  activePunch: 0,
+  activeUnderline: false,
+  boxPadX: 0,
+  boxPadY: 0,
+  boxScope: "line" as const,
+  rotation: 0,
+  captionOpacity: 1,
+  animInMs: 260,
+  animOutMs: 100,
+  wordStaggerMs: 120,
+  exitAnimation: "fade" as const,
+  punctuationStrip: false,
+};
+
 // ---- raw → CaptionStyle ----------------------------------------------------
 function toStyle(t: RawTemplate): CaptionStyle {
   const fs = t.fontSize || 60;
@@ -136,6 +170,7 @@ function toStyle(t: RawTemplate): CaptionStyle {
   const layout = (t.layout || "bottom") as CaptionPosition;
 
   return {
+    ...EXTENDED_DEFAULTS,
     preset: t.id,
 
     fontFamily: cssFamily(t.font, t.fallbackFonts),

@@ -25,9 +25,6 @@ export interface RenderInput {
   height: number;
 }
 
-const ENTER = 0.26; // cue-level entrance window (s)
-const EXIT = 0.1;
-
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeOutBack = (t: number) => {
@@ -68,7 +65,7 @@ export function renderFrame({
 
   let fontPx = Math.max(8, style.fontScale * height);
   const maxW = style.maxWidth * width;
-  const disp = (w: Word) => (style.uppercase ? w.text.toUpperCase() : w.text);
+  const disp = (w: Word) => transformText(w.text, style);
 
   // single-line button pills: shrink to fit
   if (style.maxLines === 1) {
@@ -123,14 +120,24 @@ export function renderFrame({
   topY += (style.offsetY || 0) * height; // free-drag vertical offset
   const shiftX = (style.offsetX || 0) * width; // free-drag horizontal offset
 
-  // cue-level exit fade
-  const exitP = clamp01((cue.end - time) / EXIT);
-  const cueAlpha = exitP;
+  // horizontal alignment within the max-width column
+  const lineX = (lineW: number): number => {
+    const boxLeft = (width - maxW) / 2 + shiftX;
+    if (style.textAlign === "left") return boxLeft;
+    if (style.textAlign === "right") return boxLeft + (maxW - lineW);
+    return (width - lineW) / 2 + shiftX;
+  };
+
+  // cue-level exit (fade + optional transform) × whole-block opacity
+  const outSec = Math.max(0.02, (style.animOutMs || 100) / 1000);
+  const exitP = clamp01((cue.end - time) / outSec);
+  const exitAlpha = style.exitAnimation === "none" ? 1 : exitP;
+  const cueAlpha = exitAlpha * (style.captionOpacity ?? 1);
 
   // ---- positioned words + per-word entrance ----------------------------------
   const laid: LaidWord[] = [];
   lines.forEach((ln, li) => {
-    let x = (width - ln.w) / 2 + shiftX;
+    let x = lineX(ln.w);
     const y = topY + li * lineH + fontPx;
     for (const it of ln.items) {
       laid.push({
@@ -146,14 +153,37 @@ export function renderFrame({
     }
   });
 
+  // ---- group transform: rotation + exit motion wrap every drawn element ------
+  const gcx = width / 2 + shiftX;
+  const gcy = topY + blockH / 2;
+  const rot = ((style.rotation || 0) * Math.PI) / 180;
+  let gdy = 0;
+  let gscale = 1;
+  ctx.save();
+  if (style.exitAnimation === "slide") gdy = (1 - exitP) * 0.06 * height;
+  else if (style.exitAnimation === "zoom") gscale = 1 - (1 - exitP) * 0.12;
+  else if (style.exitAnimation === "blur") {
+    try {
+      ctx.filter = `blur(${((1 - exitP) * 8).toFixed(2)}px)`;
+    } catch {
+      /* node-canvas */
+    }
+  }
+  if (rot || gscale !== 1 || gdy) {
+    ctx.translate(gcx, gcy + gdy);
+    ctx.rotate(rot);
+    ctx.scale(gscale, gscale);
+    ctx.translate(-gcx, -gcy);
+  }
+
   // ---- background box / button pill (per line) -------------------------------
   if (hasBox(style)) {
     lines.forEach((ln, li) => {
-      const pad = style.boxPad || 1;
-      const padX = fontPx * 0.42 * pad;
-      const padY = fontPx * 0.24 * pad;
+      const padScale = style.boxPad || 1;
+      const padX = fontPx * (style.boxPadX > 0 ? style.boxPadX : 0.42 * padScale);
+      const padY = fontPx * (style.boxPadY > 0 ? style.boxPadY : 0.24 * padScale);
       const bw = ln.w + padX * 2;
-      const bx = (width - bw) / 2 + shiftX;
+      const bx = lineX(ln.w) - padX;
       const by = topY + li * lineH + (lineH - fontPx) / 2 - padY;
       const bh = fontPx + padY * 2;
       // move the pill with the line's entrance (words on a line share it)
@@ -209,6 +239,8 @@ export function renderFrame({
 
   // ---- words -----------------------------------------------------------------
   for (const lw of laid) drawWord(ctx, lw, style, time, fontPx, cueAlpha);
+
+  ctx.restore(); // close group transform
 }
 
 // ---------------------------------------------------------------------------
@@ -226,44 +258,115 @@ function drawWord(
   const emph = isEmphasised(word, time, style);
   const spoken = time >= word.start;
 
-  let wordAlpha = cueAlpha * en.alpha;
+  let wordAlpha = cueAlpha * en.alpha * (style.textOpacity ?? 1);
   if (style.upcomingOpacity < 1 && !spoken && style.animation !== "word-by-word")
     wordAlpha *= style.upcomingOpacity;
 
+  // active-word vertical bounce (spoken mode)
+  let bounceDy = 0;
+  if (emph && style.activeBounce > 0 && style.emphasis === "spoken") {
+    const prog = clamp01((time - word.start) / Math.max(0.08, word.end - word.start));
+    bounceDy = -Math.sin(prog * Math.PI) * style.activeBounce * fontPx;
+  }
+  const enT: Entrance = bounceDy ? { ...en, dy: en.dy + bounceDy } : en;
+  const lwT: LaidWord = bounceDy ? { ...lw, en: enT } : lw;
+
   const scale = en.scale * emphasisScale(word, time, style);
   const useKeywordFont = emph && style.keywordFontFamily;
+  const fill = fillFor(ctx, lw, style, fontPx, emph);
+  const glowActive = style.glow > 0 && (emph || style.emphasis !== "keyword");
+  const karaoke = style.animation === "karaoke" && style.emphasis === "spoken";
 
-  drawTransformed(ctx, lw, fontPx, scale, () => {
+  drawTransformed(ctx, lwT, fontPx, scale, () => {
     ctx.save();
     ctx.globalAlpha = wordAlpha;
     if (useKeywordFont) {
       ctx.font = `${style.keywordItalic ? "italic " : ""}${style.fontWeight} ${fontPx}px ${style.keywordFontFamily}`;
     }
+    ctx.lineJoin = "round";
 
-    if (style.glow > 0 && (emph || style.emphasis !== "keyword")) {
-      ctx.shadowColor = style.glowColor;
-      ctx.shadowBlur = style.glow * fontPx * 1.3;
-    } else if (style.shadowBlur > 0) {
-      ctx.shadowColor = style.shadowColor;
-      ctx.shadowBlur = style.shadowBlur * fontPx;
-      ctx.shadowOffsetY = fontPx * 0.045;
+    // long / hard shadow (extrude) behind everything
+    if (style.longShadow > 0) {
+      const len = style.longShadow * fontPx;
+      const steps = Math.max(2, Math.round(len / 2));
+      const ang = (style.longShadowAngle * Math.PI) / 180;
+      const dxs = (Math.cos(ang) * len) / steps;
+      const dys = (Math.sin(ang) * len) / steps;
+      ctx.save();
+      ctx.fillStyle = style.longShadowColor || style.strokeColor || "rgba(0,0,0,0.85)";
+      for (let i = steps; i >= 1; i--) {
+        ctx.fillText(lw.display, lw.x + dxs * i, lw.y + dys * i);
+      }
+      ctx.restore();
     }
 
+    // neon glow — its own blurred pass so it doesn't smear the crisp fill
+    if (glowActive) {
+      ctx.save();
+      ctx.shadowColor = style.glowColor;
+      ctx.shadowBlur =
+        (style.glowRadius > 0 ? style.glowRadius : style.glow * 1.3) * fontPx;
+      ctx.fillStyle = fill;
+      ctx.fillText(lw.display, lw.x, lw.y);
+      ctx.fillText(lw.display, lw.x, lw.y);
+      ctx.restore();
+    }
+
+    // drop shadow for readability (can coexist with glow now)
+    if (style.shadowBlur > 0) {
+      ctx.shadowColor = style.shadowColor;
+      ctx.shadowBlur = style.shadowBlur * fontPx;
+      ctx.shadowOffsetX = (style.shadowOffsetX || 0) * fontPx;
+      ctx.shadowOffsetY = (style.shadowOffsetY ?? 0.045) * fontPx;
+    }
+
+    // stacked outlines (largest first), then the main stroke
+    for (const sl of style.strokes || []) {
+      if (!sl || sl.width <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = wordAlpha * (sl.opacity ?? 1);
+      ctx.lineWidth = sl.width * fontPx;
+      ctx.strokeStyle = sl.color;
+      ctx.strokeText(lw.display, lw.x, lw.y);
+      ctx.restore();
+    }
     if (style.strokeColor && style.strokeWidth > 0) {
-      ctx.lineJoin = "round";
+      ctx.save();
+      ctx.globalAlpha = wordAlpha * (style.strokeOpacity ?? 1);
       ctx.lineWidth = style.strokeWidth * fontPx;
       ctx.strokeStyle = style.strokeColor;
       ctx.strokeText(lw.display, lw.x, lw.y);
+      ctx.restore();
     }
 
-    ctx.fillStyle = fillFor(ctx, lw, style, fontPx, emph);
-    ctx.fillText(lw.display, lw.x, lw.y);
-    if (style.glow > 0 && (emph || style.emphasis !== "keyword")) {
+    // fill — karaoke does a two-tone left→right sweep
+    if (karaoke) {
+      ctx.save();
+      ctx.shadowColor = "transparent";
+      ctx.fillStyle = style.color;
+      if (style.upcomingOpacity < 1)
+        ctx.globalAlpha = wordAlpha * style.upcomingOpacity;
+      ctx.fillText(lw.display, lw.x, lw.y);
+      ctx.restore();
+      const prog = clamp01((time - word.start) / Math.max(0.03, word.end - word.start));
+      if (prog > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(lw.x - fontPx * 0.1, lw.y - fontPx * 1.15, lw.w * prog + fontPx * 0.12, fontPx * 1.55);
+        ctx.clip();
+        ctx.fillStyle = style.activeWordColor || fill;
+        ctx.fillText(lw.display, lw.x, lw.y);
+        ctx.restore();
+      }
+    } else {
+      ctx.fillStyle = fill;
       ctx.fillText(lw.display, lw.x, lw.y);
     }
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
     if (style.gloss) {
-      ctx.shadowBlur = 0;
       const top = lw.y - fontPx * 0.72;
       const g = ctx.createLinearGradient(0, top, 0, top + fontPx * 0.5);
       g.addColorStop(0, "rgba(255,255,255,0.5)");
@@ -271,6 +374,23 @@ function drawWord(
       ctx.fillStyle = g;
       ctx.fillText(lw.display, lw.x, lw.y);
     }
+
+    // underline / strikethrough
+    const decor = typeof fill === "string" ? fill : style.color;
+    const line = (yOff: number) => {
+      ctx.save();
+      ctx.globalAlpha = wordAlpha;
+      ctx.strokeStyle = decor;
+      ctx.lineWidth = Math.max(2, fontPx * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(lw.x, lw.y + yOff);
+      ctx.lineTo(lw.x + lw.w, lw.y + yOff);
+      ctx.stroke();
+      ctx.restore();
+    };
+    if (style.underline || (emph && style.activeUnderline)) line(fontPx * 0.14);
+    if (style.strikethrough) line(-fontPx * 0.26);
+
     ctx.restore();
   });
 }
@@ -294,7 +414,7 @@ function entranceFor(
       return a === "typewriter"
         ? { ...base, hidden: true }
         : { ...base, hidden: true };
-    const p = clamp01((time - word.start) / 0.12);
+    const p = clamp01((time - word.start) / Math.max(0.03, (style.wordStaggerMs || 120) / 1000));
     return {
       hidden: false,
       scale: a === "reveal" ? easeOutBack(Math.min(1, p * 1.4)) : 0.9 + 0.1 * easeOut(p),
@@ -304,7 +424,7 @@ function entranceFor(
     };
   }
 
-  const p = clamp01((time - cue.start) / ENTER);
+  const p = clamp01((time - cue.start) / Math.max(0.05, (style.animInMs || 260) / 1000));
   const done = p >= 1;
   switch (a) {
     case "pop":
@@ -349,10 +469,18 @@ function entranceFor(
 }
 
 function emphasisScale(word: Word, time: number, style: CaptionStyle): number {
-  if (!isEmphasised(word, time, style) || style.activeScale === 1) return 1;
-  if (style.emphasis === "keyword") return style.activeScale;
-  const prog = clamp01((time - word.start) / Math.max(0.08, word.end - word.start));
-  return 1 + (style.activeScale - 1) * easeOut(prog);
+  if (!isEmphasised(word, time, style)) return 1;
+  const base = style.activeScale || 1;
+  if (style.emphasis === "keyword") return base;
+  const dur = Math.max(0.08, word.end - word.start);
+  const prog = clamp01((time - word.start) / dur);
+  let scale = 1 + (base - 1) * easeOut(prog);
+  if (style.activePunch > 0) {
+    // scale spike on onset, decaying over ~0.25s
+    const punchP = clamp01((time - word.start) / 0.25);
+    scale += style.activePunch * (1 - easeOut(punchP));
+  }
+  return scale;
 }
 
 function drawTransformed(
@@ -387,25 +515,25 @@ function fillFor(
 ): string | CanvasGradient {
   const top = lw.y - fontPx * 0.74;
   const bottom = lw.y + fontPx * 0.06;
+  // gradient endpoints honour fillGradientDir (v = top→bottom, h = left→right)
+  const grad = (a: string, b: string): CanvasGradient => {
+    const g =
+      style.fillGradientDir === "h"
+        ? ctx.createLinearGradient(lw.x, 0, lw.x + lw.w, 0)
+        : ctx.createLinearGradient(0, top, 0, bottom);
+    g.addColorStop(0, a);
+    g.addColorStop(1, b);
+    return g;
+  };
   if (emph && style.highlightMode === "box") return style.activeBoxTextColor;
   if (emph && style.highlightMode !== "box") {
-    if (style.activeWordColor2) {
-      const g = ctx.createLinearGradient(0, top, 0, bottom);
-      g.addColorStop(0, style.activeWordColor);
-      g.addColorStop(1, style.activeWordColor2);
-      return g;
-    }
+    if (style.activeWordColor2) return grad(style.activeWordColor, style.activeWordColor2);
     return style.activeWordColor;
   }
   if (!emph && style.emphasis === "keyword" && lw.word.highlight) {
     return style.highlightColor;
   }
-  if (style.color2) {
-    const g = ctx.createLinearGradient(0, top, 0, bottom);
-    g.addColorStop(0, style.color);
-    g.addColorStop(1, style.color2);
-    return g;
-  }
+  if (style.color2) return grad(style.color, style.color2);
   return style.color;
 }
 
@@ -517,7 +645,7 @@ function boxFill(
 }
 
 function setBaseFont(ctx: Ctx2D, style: CaptionStyle, fontPx: number): void {
-  ctx.font = `${style.fontWeight} ${fontPx}px ${style.fontFamily}`;
+  ctx.font = `${style.italic ? "italic " : ""}${style.fontWeight} ${fontPx}px ${style.fontFamily}`;
   try {
     (ctx as unknown as { letterSpacing: string }).letterSpacing = `${
       style.letterSpacing * fontPx
@@ -525,6 +653,22 @@ function setBaseFont(ctx: Ctx2D, style: CaptionStyle, fontPx: number): void {
   } catch {
     /* node-canvas may not support it */
   }
+}
+
+/** Apply punctuation stripping + text-transform (falls back to legacy uppercase). */
+function transformText(text: string, style: CaptionStyle): string {
+  let out = text;
+  if (style.punctuationStrip) out = out.replace(/[.,!?;:]+/g, "");
+  const tt =
+    style.textTransform && style.textTransform !== "none"
+      ? style.textTransform
+      : style.uppercase
+        ? "upper"
+        : "none";
+  if (tt === "upper") return out.toUpperCase();
+  if (tt === "lower") return out.toLowerCase();
+  if (tt === "title") return out.replace(/\b\w/g, (c) => c.toUpperCase());
+  return out;
 }
 
 function roundRect(

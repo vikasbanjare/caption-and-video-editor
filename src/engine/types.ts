@@ -55,6 +55,17 @@ export type HighlightMode = "color" | "box" | "bar";
 /** Which word gets emphasised: the currently-spoken one, or the cue's keyword. */
 export type EmphasisMode = "spoken" | "keyword";
 
+export type TextTransform = "none" | "upper" | "lower" | "title";
+export type TextAlign = "left" | "center" | "right";
+export type ExitAnimation = "none" | "fade" | "slide" | "zoom" | "blur";
+
+/** One stroke in a stacked-outline stack (Hormozi/Beast style). */
+export interface StrokeLayer {
+  width: number; // fraction of font px
+  color: string;
+  opacity: number; // 0..1
+}
+
 /**
  * Full caption style. Sizes that must match between browser preview and server
  * render are fractions of the canvas (resolution-independent). Superset of the
@@ -133,4 +144,49 @@ export interface CaptionStyle {
   boxShadow: string;
   boxShadowBlur: number; // fraction of font px
   boxShadowDY: number; // fraction of font px
+
+  // --- extended typography ---
+  italic: boolean;
+  textTransform: TextTransform; // overrides `uppercase` when not "none"
+  textAlign: TextAlign;
+  underline: boolean;
+  strikethrough: boolean;
+
+  // --- extended fill / decoration ---
+  fillGradientDir: "v" | "h";
+  textOpacity: number; // 0..1
+  strokeOpacity: number; // 0..1
+  /** stacked outlines drawn largest→smallest behind the fill ("" list = none) */
+  strokes: StrokeLayer[];
+
+  // --- extended shadow / glow ---
+  shadowOffsetX: number; // fraction of font px
+  shadowOffsetY: number; // fraction of font px
+  longShadow: number; // length, fraction of font px (0 = off)
+  longShadowAngle: number; // degrees
+  longShadowColor: string; // "" = derive
+  glowRadius: number; // fraction of font px (0 = derive from glow)
+
+  // --- extended emphasis ---
+  activeBounce: number; // amplitude, fraction of font px
+  activePunch: number; // extra scale spike on word onset (0 = off)
+  activeUnderline: boolean;
+
+  // --- extended box ---
+  boxPadX: number; // fraction of font px (0 = use boxPad)
+  boxPadY: number; // fraction of font px (0 = use boxPad)
+  boxScope: "line" | "word" | "block";
+
+  // --- transform ---
+  rotation: number; // degrees
+  captionOpacity: number; // 0..1, whole block
+
+  // --- animation timing ---
+  animInMs: number;
+  animOutMs: number;
+  wordStaggerMs: number;
+  exitAnimation: ExitAnimation;
+
+  // --- effects ---
+  punctuationStrip: boolean;
 }
