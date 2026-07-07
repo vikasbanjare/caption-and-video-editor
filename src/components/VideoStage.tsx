@@ -222,7 +222,7 @@ export default function VideoStage({
       <div className="mt-4 flex w-full max-w-xl items-center gap-2">
         <button
           onClick={() => frameStep(-1)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface2 text-slate-300 transition-colors hover:text-white"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface2 text-ink transition-colors hover:text-ink"
           aria-label="Previous frame"
           title="Previous frame (,)"
         >
@@ -237,7 +237,7 @@ export default function VideoStage({
         </button>
         <button
           onClick={() => frameStep(1)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface2 text-slate-300 transition-colors hover:text-white"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface2 text-ink transition-colors hover:text-ink"
           aria-label="Next frame"
           title="Next frame (.)"
         >
@@ -261,7 +261,7 @@ export default function VideoStage({
         </span>
         <button
           onClick={cycleRate}
-          className="h-7 w-11 shrink-0 rounded-md border border-edge bg-surface2 font-mono text-[11px] text-slate-300 transition-colors hover:text-white"
+          className="h-7 w-11 shrink-0 rounded-md border border-edge bg-surface2 font-mono text-[11px] text-ink transition-colors hover:text-ink"
           title="Playback speed"
           aria-label={`Playback speed ${rate}x`}
         >

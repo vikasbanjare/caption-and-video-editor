@@ -68,7 +68,7 @@ export default function TemplatePicker({ current, onPick }: Props) {
           >
             <Thumb preset={p} />
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <span className="truncate text-xs font-semibold text-slate-100">
+              <span className="truncate text-xs font-semibold text-ink">
                 {p.label}
               </span>
               <span className="ml-1 shrink-0 text-[10px] text-muted">{p.tag}</span>
@@ -95,7 +95,7 @@ function Chip({
       className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
         active
           ? "border-accent bg-accent/15 text-accent2"
-          : "border-edge bg-surface2 text-muted hover:text-white"
+          : "border-edge bg-surface2 text-muted hover:text-ink"
       }`}
     >
       {children}

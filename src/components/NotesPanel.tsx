@@ -39,7 +39,7 @@ export default function NotesPanel({
           className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
             noteMode
               ? "border-accent bg-accent text-white"
-              : "border-edge bg-surface2 text-slate-200 hover:border-edge2"
+              : "border-edge bg-surface2 text-ink hover:border-edge2"
           }`}
           title="Click the video to drop a note pin"
         >
@@ -47,7 +47,7 @@ export default function NotesPanel({
         </button>
         <button
           onClick={onAddAtPlayhead}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-edge bg-surface2 px-2.5 text-xs font-medium text-slate-200 hover:border-edge2"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-edge bg-surface2 px-2.5 text-xs font-medium text-ink hover:border-edge2"
           title="Add a note at the current time"
         >
           ＋ At playhead
@@ -95,7 +95,7 @@ export default function NotesPanel({
                     onClick={() => onDelete(n.id)}
                     title="Delete note"
                     aria-label="Delete note"
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-xs text-muted hover:bg-surface3 hover:text-white"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-xs text-muted hover:bg-surface3 hover:text-ink"
                   >
                     ✕
                   </button>
@@ -106,7 +106,7 @@ export default function NotesPanel({
                 onChange={(e) => onEdit(n.id, e.target.value)}
                 rows={Math.max(1, Math.ceil((n.body.length || 1) / 30))}
                 placeholder="Write a note…"
-                className="w-full resize-none rounded-lg bg-transparent text-sm leading-snug text-slate-100 outline-none placeholder:text-muted/60 focus:bg-black/20"
+                className="w-full resize-none rounded-lg bg-transparent text-sm leading-snug text-ink outline-none placeholder:text-muted/60 focus:bg-surface2"
                 spellCheck={false}
               />
             </div>

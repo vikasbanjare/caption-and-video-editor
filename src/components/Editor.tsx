@@ -48,6 +48,7 @@ import StylePanel from "./StylePanel";
 import Timeline from "./Timeline";
 import ProjectConsole from "./ProjectConsole";
 import StageRail, { type Stage } from "./StageRail";
+import { PulseMark, Wordmark } from "./Logo";
 
 /**
  * The editing studio: upload → real in-browser transcription (Whisper) →
@@ -79,7 +80,25 @@ export default function Editor() {
   const [createdAt, setCreatedAt] = useState(0);
   const [thumb, setThumb] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("ingest");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const srtInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const t = document.documentElement.dataset.theme;
+    if (t === "light" || t === "dark") setTheme(t);
+  }, []);
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      try {
+        localStorage.setItem("cutpilot-theme", next);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   // ---- notes -----------------------------------------------------------------
   const [notes, setNotes] = useState<ProjectNote[]>([]);
@@ -606,10 +625,8 @@ export default function Editor() {
       {/* slim top bar */}
       <header className="flex h-11 shrink-0 items-center gap-2.5 border-b border-edge bg-surface px-3">
         <button onClick={() => setStage("ingest")} className="flex items-center gap-2" title="Project console">
-          <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-accent font-display text-[13px] font-semibold leading-none text-white">
-            C
-          </span>
-          <span className="font-display text-[15px] font-semibold leading-none">CutPilot</span>
+          <PulseMark size={18} />
+          <Wordmark />
         </button>
         {hasMedia && (
           <>
@@ -623,6 +640,14 @@ export default function Editor() {
           </>
         )}
         <div className="ml-auto flex items-center gap-1">
+          <TopBtn title="Toggle light / dark" onClick={toggleTheme}>
+            {theme === "dark" ? (
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="3.2" /><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M13 3l-1.1 1.1M4.1 11.9 3 13" /></svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M6.2 2.2a5.8 5.8 0 1 0 7.6 7.6A4.8 4.8 0 0 1 6.2 2.2Z" /></svg>
+            )}
+          </TopBtn>
+          <span className="mx-0.5 h-5 w-px bg-edge" />
           <TopBtn title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6.5 3 3 6.5 6.5 10" /><path d="M3 6.5h6a4 4 0 0 1 0 8H7" /></svg>
           </TopBtn>
@@ -857,7 +882,7 @@ function PanelTab({
     <button
       onClick={onClick}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
-        active ? "bg-surface3 text-white" : "text-muted hover:text-white"
+        active ? "bg-surface3 text-ink" : "text-muted hover:text-ink"
       }`}
     >
       {children}

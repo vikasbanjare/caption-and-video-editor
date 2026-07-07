@@ -164,7 +164,7 @@ export default function StylePanel({ style, onChange, onPreset }: Props) {
                     className={`rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-colors ${
                       style.highlightMode === m
                         ? "bg-accent text-white"
-                        : "text-muted hover:text-white"
+                        : "text-muted hover:text-ink"
                     }`}
                   >
                     {m}
@@ -280,7 +280,7 @@ function TabBtn({
     <button
       onClick={onClick}
       className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-        active ? "bg-surface3 text-white" : "text-muted hover:text-white"
+        active ? "bg-surface3 text-ink" : "text-muted hover:text-ink"
       }`}
     >
       {children}

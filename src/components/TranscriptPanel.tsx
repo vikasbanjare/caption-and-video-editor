@@ -40,7 +40,7 @@ export default function TranscriptPanel({
         <div className="text-2xl opacity-40">✍️</div>
         <p className="text-sm text-muted">No transcript yet</p>
         <p className="text-xs text-muted/70">
-          Hit <span className="text-slate-300">Auto-transcribe</span> or import an
+          Hit <span className="text-ink">Auto-transcribe</span> or import an
           SRT, then edit any word here.
         </p>
       </div>
@@ -91,7 +91,7 @@ export default function TranscriptPanel({
               value={c.text}
               onChange={(e) => onEditText(c.id, e.target.value)}
               rows={Math.max(1, Math.ceil(c.text.length / 30))}
-              className="w-full resize-none rounded-lg bg-transparent text-sm leading-snug text-slate-100 outline-none focus:bg-black/20"
+              className="w-full resize-none rounded-lg bg-transparent text-sm leading-snug text-ink outline-none focus:bg-surface2"
               spellCheck={false}
             />
           </div>
@@ -123,7 +123,7 @@ function IconBtn({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-6 w-6 items-center justify-center rounded-md text-xs text-muted hover:bg-surface3 hover:text-white disabled:opacity-30"
+      className="flex h-6 w-6 items-center justify-center rounded-md text-xs text-muted hover:bg-surface3 hover:text-ink disabled:opacity-30"
     >
       {children}
     </button>

@@ -487,7 +487,7 @@ export default function Timeline({
           ref={timeLabelRef}
           onClick={() => setTc((v) => (v === "clock" ? "smpte" : "clock"))}
           title={`Timecode: ${tc === "smpte" ? "SMPTE (click for m:ss)" : "m:ss (click for SMPTE)"}`}
-          className="ml-2 rounded-md px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted hover:bg-surface2 hover:text-slate-200"
+          className="ml-2 rounded-md px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted hover:bg-surface2 hover:text-ink"
         />
 
         <span className="ml-auto hidden text-[10px] text-muted/70 md:inline">
@@ -581,10 +581,10 @@ export default function Timeline({
                     onPointerCancel={endCueDrag}
                     title={`${c.text}\n${fmtClock(start)} → ${fmtClock(end)}`}
                   >
-                    <div className="pointer-events-none truncate px-2 pt-1 text-[10px] font-medium leading-tight text-slate-100">
+                    <div className="pointer-events-none truncate px-2 pt-1 text-[10px] font-medium leading-tight text-ink">
                       {c.text}
                     </div>
-                    <div className="pointer-events-none truncate px-2 font-mono text-[8px] text-slate-300/70">
+                    <div className="pointer-events-none truncate px-2 font-mono text-[8px] text-ink/60">
                       {fmtClock(start)}–{fmtClock(end)}
                     </div>
                     {/* trim handles */}
@@ -641,7 +641,7 @@ function TlBtn({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border border-edge bg-surface2 px-2 text-[11px] font-medium text-slate-200 transition-colors hover:border-edge2 hover:text-white disabled:opacity-35"
+      className="inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border border-edge bg-surface2 px-2 text-[11px] font-medium text-ink transition-colors hover:border-edge2 hover:text-ink disabled:opacity-35"
     >
       {children}
     </button>
