@@ -1,17 +1,31 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+// Editorial type system (see .claude/skills/cutpilot-design):
+// Fraunces = display serif (brand voice), Hanken Grotesk = UI grotesque
+// (NOT Inter), JetBrains Mono = mono labels/timecodes.
+const display = Fraunces({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-display",
+  display: "swap",
+  style: ["normal", "italic"],
+});
+const sans = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "CutPilot — AI Caption Studio",
+  title: "CutPilot — the caption instrument",
   description:
-    "Upload a video, transcribe it in your browser, and style animated captions with premium templates.",
+    "Transcribe in the browser, cut on a real timeline, and set captions in 97 studio-grade templates. Type-first, no upload to a server.",
 };
 
 export default function RootLayout({
@@ -20,9 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <head>
-        {/* Display fonts used for burned-in captions (rendered on <canvas>). */}
+        {/* Display fonts used for burned-in CAPTIONS (rendered on <canvas>) —
+            separate from the UI type system above. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"

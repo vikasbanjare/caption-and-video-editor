@@ -37,7 +37,6 @@ import {
   loadProjectVideo,
   getProject,
   uid,
-  timeAgo,
   type ProjectRecord,
   type ProjectNote,
 } from "@/lib/store";
@@ -49,6 +48,7 @@ import NotesPanel from "./NotesPanel";
 import StylePanel from "./StylePanel";
 import Timeline from "./Timeline";
 import ProjectLibrary from "./ProjectLibrary";
+import Landing from "./Landing";
 
 /**
  * The editing studio: upload → real in-browser transcription (Whisper) →
@@ -577,33 +577,32 @@ export default function Editor() {
 
   return (
     <div className="flex h-screen flex-col">
-      <Toolbar
-        hasVideo={!!videoUrl}
-        hasCues={cues.length > 0}
-        hasProject={!!projectId}
-        title={title}
-        projectCount={projects.length}
-        busy={busy}
-        language={language}
-        status={status}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={undo}
-        onRedo={redo}
-        onTitleChange={setTitle}
-        onOpenLibrary={() => setShowLibrary(true)}
-        onUpload={handleUpload}
-        onImportSrt={handleImportSrt}
-        onTranscribe={handleTranscribe}
-        onLoadSample={handleLoadSample}
-        onExportSrt={handleExportSrt}
-        onLanguage={setLanguage}
-      />
-
       {!videoUrl ? (
-        <Hero onUpload={handleUpload} projects={projects} onOpen={openProject} />
+        <Landing onUpload={handleUpload} projects={projects} onOpen={openProject} />
       ) : (
         <>
+          <Toolbar
+            hasVideo={!!videoUrl}
+            hasCues={cues.length > 0}
+            hasProject={!!projectId}
+            title={title}
+            projectCount={projects.length}
+            busy={busy}
+            language={language}
+            status={status}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={undo}
+            onRedo={redo}
+            onTitleChange={setTitle}
+            onOpenLibrary={() => setShowLibrary(true)}
+            onUpload={handleUpload}
+            onImportSrt={handleImportSrt}
+            onTranscribe={handleTranscribe}
+            onLoadSample={handleLoadSample}
+            onExportSrt={handleExportSrt}
+            onLanguage={setLanguage}
+          />
           <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
             <section className="hidden min-h-0 flex-col border-r border-edge bg-surface/60 lg:flex">
               <div className="flex gap-1 border-b border-edge px-2 py-1.5">
@@ -704,115 +703,6 @@ export default function Editor() {
           onClose={() => setShowLibrary(false)}
         />
       )}
-    </div>
-  );
-}
-
-function Hero({
-  onUpload,
-  projects,
-  onOpen,
-}: {
-  onUpload: (f: File) => void;
-  projects: ProjectRecord[];
-  onOpen: (id: string) => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const [drag, setDrag] = useState(false);
-  const recents = projects.slice(0, 4);
-
-  return (
-    <div className="scroll-thin flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-hero-grad p-6">
-      <div className="w-full max-w-2xl text-center">
-        <span className="chip mx-auto mb-5 w-fit border-accent/30 bg-accent/10 text-accent2">
-          ✨ Real speech-to-text in your browser — no server, no API key
-        </span>
-        <h1 className="mb-2 bg-gradient-to-b from-white to-slate-400 bg-clip-text text-4xl font-bold tracking-tight text-transparent sm:text-5xl">
-          Caption your videos beautifully
-        </h1>
-        <p className="mx-auto mb-8 max-w-md text-sm text-muted">
-          Upload a clip, auto-transcribe it locally with Whisper, then perfect the
-          timing on a full editing timeline. Projects auto-save in your browser.
-        </p>
-
-        <label
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDrag(true);
-          }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDrag(false);
-            const f = e.dataTransfer.files?.[0];
-            if (f) onUpload(f);
-          }}
-          className={`group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-14 transition-all ${
-            drag
-              ? "border-accent bg-accent/10"
-              : "border-edge2 bg-surface/50 hover:border-accent/60 hover:bg-surface"
-          }`}
-        >
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-grad text-white shadow-glow transition-transform group-hover:scale-105">
-            <svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 11V3M8 3 4.5 6.5M8 3l3.5 3.5M3 11.5V13a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 13 13v-1.5" />
-            </svg>
-          </div>
-          <div>
-            <p className="font-medium text-white">Drop a video or audio file</p>
-            <p className="text-xs text-muted">or click to browse · MP4, MOV, WEBM, MP3, WAV</p>
-          </div>
-          <input
-            ref={input}
-            type="file"
-            accept="video/*,audio/*"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onUpload(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
-
-        {recents.length > 0 && (
-          <div className="mt-8 text-left">
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              Recent projects
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {recents.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => onOpen(p.id)}
-                  className="group overflow-hidden rounded-xl border border-edge bg-surface text-left transition-all hover:-translate-y-0.5 hover:border-edge2"
-                >
-                  <div className="flex aspect-video items-center justify-center overflow-hidden bg-black">
-                    {p.thumb ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.thumb} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-2xl opacity-40">🎬</span>
-                    )}
-                  </div>
-                  <div className="p-2">
-                    <div className="truncate text-xs font-semibold text-slate-100">{p.title}</div>
-                    <div className="text-[10px] text-muted">{timeAgo(p.updatedAt)}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted">
-          <span>🎙️ Whisper transcription</span>
-          <span>🎬 Editing timeline</span>
-          <span>📌 Frame notes</span>
-          <span>💾 Auto-saved projects</span>
-          <span>🌐 Hinglish</span>
-        </div>
-      </div>
     </div>
   );
 }

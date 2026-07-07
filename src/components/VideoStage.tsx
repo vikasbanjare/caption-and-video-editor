@@ -203,7 +203,7 @@ export default function VideoStage({
               {typeof progress.percent === "number" && (
                 <div className="h-1.5 w-48 overflow-hidden rounded-full bg-white/15">
                   <div
-                    className="h-full bg-accent-grad transition-all"
+                    className="h-full bg-accent transition-all"
                     style={{ width: `${progress.percent}%` }}
                   />
                 </div>
@@ -230,7 +230,7 @@ export default function VideoStage({
         </button>
         <button
           onClick={togglePlay}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-grad text-white shadow-glow transition-transform active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-transform active:scale-95"
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? <PauseIcon /> : <PlayIcon />}
@@ -252,7 +252,7 @@ export default function VideoStage({
           onChange={onScrub}
           className="min-w-0 flex-1 cursor-pointer"
           style={{
-            background: `linear-gradient(to right, #7c5cff ${pct}%, #2a2f3c ${pct}%)`,
+            background: `linear-gradient(to right, #F94B1E ${pct}%, #3a352c ${pct}%)`,
           }}
           aria-label="Seek"
         />

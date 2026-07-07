@@ -159,7 +159,7 @@ export default function Timeline({
         const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300];
         const major = steps.find((s) => s * p >= 64) ?? 600;
         const minor = major / 5;
-        ctx.fillStyle = "#5b6270";
+        ctx.fillStyle = "#8a7f6f";
         ctx.font = "9px ui-monospace, monospace";
         ctx.textBaseline = "top";
         // index-based ticks — no float accumulation, so labels stay exact
@@ -170,7 +170,7 @@ export default function Timeline({
           if (t < 0) continue;
           const x = Math.round(t * p - left) + 0.5;
           const isMajor = k % 5 === 0;
-          ctx.strokeStyle = isMajor ? "#454c5c" : "#2b303c";
+          ctx.strokeStyle = isMajor ? "#443c31" : "#2c271f";
           ctx.beginPath();
           ctx.moveTo(x, RULER_H);
           ctx.lineTo(x, RULER_H - (isMajor ? 10 : 5));
@@ -194,7 +194,7 @@ export default function Timeline({
         const total = Math.max(durationRef.current, 0.001);
         const mid = WAVE_H / 2;
         if (pk && pk.length) {
-          ctx.fillStyle = "rgba(124,92,255,0.75)";
+          ctx.fillStyle = "rgba(176,162,142,0.5)";
           for (let x = 0; x < w; x += 2) {
             const t = (left + x) / p;
             if (t > total) break;
@@ -203,7 +203,7 @@ export default function Timeline({
             ctx.fillRect(x, mid - h / 2, 1.4, h);
           }
         } else {
-          ctx.fillStyle = "rgba(124,92,255,0.35)";
+          ctx.fillStyle = "rgba(176,162,142,0.3)";
           ctx.fillRect(0, mid - 1, Math.min(w, total * p - left), 2);
         }
       }
@@ -614,8 +614,8 @@ export default function Timeline({
               className="pointer-events-none absolute top-0 z-20 h-full"
               style={{ left: 0 }}
             >
-              <div className="absolute -left-[5px] top-0 h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent border-t-rose-400" />
-              <div className="absolute -left-px h-full w-0.5 bg-rose-400/90" />
+              <div className="absolute -left-[5px] top-0 h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent border-t-accent" />
+              <div className="absolute -left-px h-full w-0.5 bg-accent/90" />
             </div>
           </div>
         </div>

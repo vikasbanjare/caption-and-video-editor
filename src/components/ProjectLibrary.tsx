@@ -54,7 +54,7 @@ export default function ProjectLibrary({
           {projects.map((p) => (
             <div
               key={p.id}
-              className={`group relative overflow-hidden rounded-2xl border bg-surface text-left shadow-card transition-all hover:-translate-y-0.5 ${
+              className={`group relative overflow-hidden rounded-lg border bg-surface text-left transition-all hover:-translate-y-0.5 ${
                 p.id === currentId ? "border-accent ring-1 ring-accent/50" : "border-edge hover:border-edge2"
               }`}
             >

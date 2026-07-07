@@ -1,44 +1,57 @@
 import type { Config } from "tailwindcss";
 
+// Semantic tokens are RGB channels behind CSS vars (see globals.css) so the
+// whole app reskins between the Studio (dark) and Paper (light) themes.
+const tok = (name: string) => `rgb(var(${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        bg: "#08080c",
-        surface: "#0f1016",
-        surface2: "#15171f",
-        surface3: "#1c1f29",
-        edge: "#262a36",
-        edge2: "#333845",
-        accent: "#7c5cff",
-        accent2: "#a78bfa",
-        good: "#34d399",
-        muted: "#8b92a1",
+        bg: tok("--bg"),
+        surface: tok("--surface"),
+        surface2: tok("--surface-2"),
+        surface3: tok("--surface-3"),
+        edge: tok("--edge"),
+        edge2: tok("--edge-2"),
+        ink: tok("--ink"),
+        muted: tok("--muted"),
+        accent: tok("--accent"),
+        accent2: tok("--accent-2"),
+        good: "rgb(123 182 97 / <alpha-value>)",
+        // back-compat aliases used by a few components
+        panel: tok("--surface"),
+        panel2: tok("--surface-2"),
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
-      boxShadow: {
-        glow: "0 0 0 1px rgba(124,92,255,0.4), 0 8px 30px -6px rgba(124,92,255,0.5)",
-        card: "0 1px 0 0 rgba(255,255,255,0.04) inset, 0 10px 30px -12px rgba(0,0,0,0.6)",
+      borderRadius: {
+        sm: "6px",
+        DEFAULT: "10px",
+        md: "10px",
+        lg: "14px",
+        xl: "18px",
       },
-      backgroundImage: {
-        "accent-grad": "linear-gradient(135deg, #7c5cff 0%, #4f8bff 100%)",
-        "hero-grad":
-          "radial-gradient(1200px 600px at 50% -10%, rgba(124,92,255,0.18), transparent 60%)",
+      letterSpacing: {
+        label: "0.2em",
       },
       keyframes: {
         "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        shimmer: {
-          "100%": { transform: "translateX(100%)" },
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
         },
       },
       animation: {
-        "fade-up": "fade-up 0.3s ease both",
+        "fade-up": "fade-up 0.5s cubic-bezier(0.16,1,0.3,1) both",
+        marquee: "marquee 32s linear infinite",
       },
     },
   },

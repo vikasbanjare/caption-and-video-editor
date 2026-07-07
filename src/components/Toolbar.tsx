@@ -62,10 +62,12 @@ export default function Toolbar({
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-edge bg-surface/80 px-4 py-2.5 backdrop-blur">
       <div className="mr-1 flex items-center gap-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-grad text-sm shadow-glow">
-          🎬
+        <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-accent font-display text-[15px] font-semibold leading-none text-white">
+          C
         </div>
-        <span className="font-semibold tracking-tight text-white">CutPilot</span>
+        <span className="font-display text-[17px] font-semibold tracking-tight text-ink">
+          CutPilot
+        </span>
       </div>
 
       <button
