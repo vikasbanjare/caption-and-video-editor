@@ -322,7 +322,7 @@ export default function VideoStage({
         </button>
         <button
           onClick={togglePlay}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-transform active:scale-95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-grad-accent text-white shadow-glow-sm transition-transform hover:scale-105 active:scale-95"
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? <PauseIcon /> : <PlayIcon />}

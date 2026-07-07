@@ -59,8 +59,8 @@ export default function TranscriptPanel({
             onClick={() => onSelect(c.id)}
             className={`group mb-2 rounded-xl border p-2.5 transition-all ${
               active
-                ? "border-accent/60 bg-accent/10"
-                : "border-edge bg-surface2 hover:border-edge2"
+                ? "border-accent/50 bg-grad-accent-soft shadow-glow-sm"
+                : "border-edge bg-surface2 hover:border-edge2 hover:bg-surface3"
             } ${selected ? "ring-1 ring-accent/70" : ""}`}
           >
             <div className="mb-1 flex items-center justify-between">

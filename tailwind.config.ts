@@ -31,11 +31,25 @@ const config: Config = {
         mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
       },
       borderRadius: {
-        sm: "6px",
-        DEFAULT: "10px",
-        md: "10px",
-        lg: "14px",
-        xl: "18px",
+        sm: "8px",
+        DEFAULT: "12px",
+        md: "12px",
+        lg: "16px",
+        xl: "20px",
+        "2xl": "26px",
+        "3xl": "32px",
+      },
+      boxShadow: {
+        soft: "0 10px 34px -14px rgb(var(--shadow) / 0.5)",
+        card: "0 2px 10px -4px rgb(var(--shadow) / 0.4)",
+        glow: "0 14px 40px -12px rgb(var(--accent) / 0.55)",
+        "glow-sm": "0 8px 22px -10px rgb(var(--accent) / 0.5)",
+      },
+      backgroundImage: {
+        "grad-accent":
+          "linear-gradient(120deg, rgb(var(--accent)), rgb(var(--accent-2)))",
+        "grad-accent-soft":
+          "linear-gradient(120deg, rgb(var(--accent) / 0.14), rgb(var(--accent-2) / 0.14))",
       },
       letterSpacing: {
         label: "0.2em",

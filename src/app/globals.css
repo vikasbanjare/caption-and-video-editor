@@ -5,39 +5,41 @@
 /* --- semantic tokens (RGB channels) --------------------------------------- */
 :root,
 :root[data-theme="dark"] {
-  /* Dark — technical / Linear-grade. Cool near-black with quiet elevation. */
-  --bg: 11 12 14;
-  --surface: 20 22 25;
-  --surface-2: 26 28 32;
-  --surface-3: 33 36 41;
-  --edge: 37 40 46;
-  --edge-2: 52 56 63;
-  --ink: 237 238 240;
-  --muted: 138 143 152;
-  --accent: 59 107 245; /* Pulse blue — matches the brand mark */
-  --accent-2: 120 150 255;
+  /* Dark — creator studio. Deep indigo-charcoal with vibrant blue-violet pop. */
+  --bg: 13 14 20;
+  --surface: 22 23 32;
+  --surface-2: 29 31 43;
+  --surface-3: 39 41 56;
+  --edge: 44 46 63;
+  --edge-2: 63 66 88;
+  --ink: 240 240 247;
+  --muted: 150 152 170;
+  --accent: 96 122 255; /* electric periwinkle-blue (Pulse) */
+  --accent-2: 162 96 255; /* violet — gradient partner */
+  --shadow: 0 0 0;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  /* Light — clean, high-contrast, paper-white with hairline structure. */
-  --bg: 250 250 251;
+  /* Light — bright, friendly, a whisper of lavender in the surfaces. */
+  --bg: 249 249 253;
   --surface: 255 255 255;
-  --surface-2: 246 247 248;
-  --surface-3: 238 240 242;
-  --edge: 227 229 233;
-  --edge-2: 208 211 217;
-  --ink: 22 24 28;
-  --muted: 99 105 114;
-  --accent: 44 87 230; /* Pulse blue (deeper for contrast on white) */
-  --accent-2: 30 68 196;
+  --surface-2: 245 244 253;
+  --surface-3: 237 236 250;
+  --edge: 228 226 243;
+  --edge-2: 206 203 231;
+  --ink: 24 22 40;
+  --muted: 103 101 124;
+  --accent: 82 92 240; /* deeper blue-violet for contrast on white */
+  --accent-2: 145 74 240;
+  --shadow: 60 54 120;
   color-scheme: light;
 }
 
 :root {
-  --r-sm: 5px;
-  --r: 8px;
-  --r-lg: 12px;
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
 }
 
 html,
@@ -55,14 +57,20 @@ body {
   background: rgb(var(--accent) / 0.28);
 }
 
-/* scrollbars — hairline, quiet */
+/* scrollbars — quiet */
 .scroll-thin::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
   background: rgb(var(--edge-2));
   border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted) / 0.6);
+  background-clip: padding-box;
 }
 .scroll-thin::-webkit-scrollbar-track {
   background: transparent;
@@ -71,7 +79,7 @@ body {
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 3px;
+  height: 5px;
   border-radius: 999px;
   background: rgb(var(--edge-2));
   outline: none;
@@ -79,36 +87,41 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   background: rgb(var(--accent));
+  border: 2px solid rgb(var(--surface));
+  box-shadow: 0 2px 8px -2px rgb(var(--accent) / 0.7);
   cursor: pointer;
 }
 
 @layer components {
-  /* flat, hairline-first controls — no gradients, no glow */
+  /* Soft, rounded, friendly controls with a vibrant primary. */
   .btn {
-    @apply inline-flex select-none items-center gap-2 rounded-sm border border-edge bg-surface px-3.5 py-2 text-sm font-medium text-ink/90 transition-colors hover:border-edge2 hover:bg-surface2 hover:text-ink active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface;
+    @apply inline-flex select-none items-center gap-2 rounded-full border border-edge bg-surface px-4 py-2 text-sm font-semibold text-ink/90 transition-all hover:border-edge2 hover:bg-surface2 hover:text-ink active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface;
   }
   .btn-primary {
-    @apply border-accent bg-accent text-white hover:bg-accent2 hover:text-white hover:border-accent2;
+    @apply border-0 bg-grad-accent text-white shadow-glow-sm hover:-translate-y-0.5 hover:text-white hover:shadow-glow hover:brightness-105;
   }
   .btn-ghost {
     @apply border-transparent bg-transparent hover:bg-surface2;
   }
   .select {
-    @apply w-full cursor-pointer rounded-sm border border-edge bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-edge2 focus:border-accent;
+    @apply w-full cursor-pointer rounded-xl border border-edge bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-edge2 focus:border-accent;
   }
   .card {
-    @apply rounded border border-edge bg-surface;
+    @apply rounded-2xl border border-edge bg-surface shadow-card;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-edge bg-surface px-2.5 py-1 text-[11px] font-medium text-muted;
+    @apply inline-flex items-center gap-1 rounded-full border border-edge bg-surface px-3 py-1 text-[11px] font-semibold text-muted transition-colors;
   }
-  /* mono editorial eyebrow / micro-label */
+  .chip-active {
+    @apply border-transparent bg-grad-accent text-white shadow-glow-sm;
+  }
+  /* mono micro-label / eyebrow */
   .eyebrow {
-    @apply font-mono text-[11px] uppercase tracking-label text-muted;
+    @apply font-mono text-[11px] font-medium uppercase tracking-label text-muted;
   }
   .label {
     @apply mb-1.5 block font-mono text-[10px] uppercase tracking-label text-muted;
@@ -118,5 +131,9 @@ input[type="range"]::-webkit-slider-thumb {
   }
   .rule {
     @apply h-px w-full bg-edge;
+  }
+  /* vibrant blue→violet text for headline accents */
+  .grad-text {
+    @apply bg-grad-accent bg-clip-text text-transparent;
   }
 }
