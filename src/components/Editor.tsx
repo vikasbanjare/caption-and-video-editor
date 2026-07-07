@@ -41,14 +41,13 @@ import {
   type ProjectNote,
 } from "@/lib/store";
 import { buildStubSrt } from "@/server/transcription/stub";
-import Toolbar from "./Toolbar";
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
 import NotesPanel from "./NotesPanel";
 import StylePanel from "./StylePanel";
 import Timeline from "./Timeline";
-import ProjectLibrary from "./ProjectLibrary";
-import Landing from "./Landing";
+import ProjectConsole from "./ProjectConsole";
+import StageRail, { type Stage } from "./StageRail";
 
 /**
  * The editing studio: upload → real in-browser transcription (Whisper) →
@@ -79,7 +78,8 @@ export default function Editor() {
   const [title, setTitle] = useState("Untitled");
   const [createdAt, setCreatedAt] = useState(0);
   const [thumb, setThumb] = useState<string | null>(null);
-  const [showLibrary, setShowLibrary] = useState(false);
+  const [stage, setStage] = useState<Stage>("ingest");
+  const srtInput = useRef<HTMLInputElement>(null);
 
   // ---- notes -----------------------------------------------------------------
   const [notes, setNotes] = useState<ProjectNote[]>([]);
@@ -260,7 +260,8 @@ export default function Editor() {
       setDuration(0);
       resetHistory();
       setCuesRaw([]);
-      setStatus(`Loaded ${file.name}. Hit Auto-transcribe.`);
+      setStage("script"); // media in → go to the Script (transcribe) room
+      setStatus(`Loaded ${file.name}. Run Auto-transcribe.`);
       // persist the media blob immediately so the project survives a reload
       saveProject(
         {
@@ -284,17 +285,11 @@ export default function Editor() {
     [language, style, resetHistory, refreshProjects]
   );
 
-  const handleUpload = useCallback(
-    (file: File) => startProjectFromFile(file),
-    [startProjectFromFile]
-  );
-
   const openProject = useCallback(
     async (id: string) => {
       const rec = getProject(id);
       if (!rec) return;
       const blob = await loadProjectVideo(id);
-      setShowLibrary(false);
       if (!blob) {
         setStatus("That project's video is missing (storage was cleared).");
         return;
@@ -320,13 +315,14 @@ export default function Editor() {
       setSelectedId(null);
       resetHistory();
       setCuesRaw(rec.cues || []);
+      setStage((rec.cues || []).length ? "cut" : "script");
       setStatus(`Opened “${rec.title}”.`);
     },
     [resetHistory]
   );
 
   const newProject = useCallback(() => {
-    setShowLibrary(false);
+    setStage("ingest");
     setVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -486,6 +482,11 @@ export default function Editor() {
     if (selectedId && !cues.some((c) => c.id === selectedId)) setSelectedId(null);
   }, [cues, selectedId]);
 
+  // The monitor remounts when switching stages — restore the playhead position.
+  useEffect(() => {
+    if (videoUrl && timeRef.current > 0) setSeekTo({ t: timeRef.current });
+  }, [stage, videoUrl]);
+
   // ---- notes ------------------------------------------------------------------
   const addNote = useCallback((t: number, x: number | null, y: number | null) => {
     setNotes((ns) => [
@@ -574,135 +575,210 @@ export default function Editor() {
 
   const effectiveDuration = duration || transcriptDuration(cues);
   const openNoteCount = notes.filter((n) => !n.resolved).length;
+  const hasMedia = !!videoUrl;
+
+  // One monitor instance, placed into whichever stage is active.
+  const monitor = videoUrl ? (
+    <VideoStage
+      videoUrl={videoUrl}
+      cues={cues}
+      style={style}
+      seekTo={seekTo}
+      progress={progress}
+      onTime={setCurrentTime}
+      onDuration={setDuration}
+      timeRef={timeRef}
+      onVideoEl={(el) => {
+        videoElRef.current = el;
+      }}
+      onPlayingChange={(p) => {
+        playingRef.current = p;
+      }}
+      notes={notes}
+      noteMode={noteMode}
+      onAddNote={onAddNoteAt}
+      onSeekNote={onSeek}
+    />
+  ) : null;
 
   return (
-    <div className="flex h-screen flex-col">
-      {!videoUrl ? (
-        <Landing onUpload={handleUpload} projects={projects} onOpen={openProject} />
-      ) : (
-        <>
-          <Toolbar
-            hasVideo={!!videoUrl}
-            hasCues={cues.length > 0}
-            hasProject={!!projectId}
-            title={title}
-            projectCount={projects.length}
-            busy={busy}
-            language={language}
-            status={status}
-            canUndo={canUndo}
-            canRedo={canRedo}
-            onUndo={undo}
-            onRedo={redo}
-            onTitleChange={setTitle}
-            onOpenLibrary={() => setShowLibrary(true)}
-            onUpload={handleUpload}
-            onImportSrt={handleImportSrt}
-            onTranscribe={handleTranscribe}
-            onLoadSample={handleLoadSample}
-            onExportSrt={handleExportSrt}
-            onLanguage={setLanguage}
+    <div className="flex h-screen flex-col bg-bg text-ink">
+      {/* slim top bar */}
+      <header className="flex h-11 shrink-0 items-center gap-2.5 border-b border-edge bg-surface px-3">
+        <button onClick={() => setStage("ingest")} className="flex items-center gap-2" title="Project console">
+          <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-accent font-display text-[13px] font-semibold leading-none text-white">
+            C
+          </span>
+          <span className="font-display text-[15px] font-semibold leading-none">CutPilot</span>
+        </button>
+        {hasMedia && (
+          <>
+            <span className="text-edge2">/</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-44 rounded-sm bg-transparent px-1.5 py-0.5 text-sm font-medium outline-none hover:bg-surface2 focus:bg-surface2"
+              aria-label="Project title"
+            />
+          </>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          <TopBtn title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6.5 3 3 6.5 6.5 10" /><path d="M3 6.5h6a4 4 0 0 1 0 8H7" /></svg>
+          </TopBtn>
+          <TopBtn title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 3 13 6.5 9.5 10" /><path d="M13 6.5H7a4 4 0 0 0 0 8h2" /></svg>
+          </TopBtn>
+          <span className="mx-1.5 h-5 w-px bg-edge" />
+          <span className="hidden max-w-[42ch] truncate font-mono text-[11px] text-muted sm:block" title={status}>
+            {status}
+          </span>
+        </div>
+      </header>
+
+      {/* active stage room */}
+      <div className="relative min-h-0 flex-1">
+        {stage === "ingest" && (
+          <ProjectConsole
+            projects={projects}
+            currentId={projectId}
+            onOpen={openProject}
+            onDelete={handleDeleteProject}
+            onNew={startProjectFromFile}
           />
-          <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
-            <section className="hidden min-h-0 flex-col border-r border-edge bg-surface/60 lg:flex">
-              <div className="flex gap-1 border-b border-edge px-2 py-1.5">
+        )}
+
+        {stage === "script" && hasMedia && (
+          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[360px_1fr]">
+            <aside className="scroll-thin hidden min-h-0 flex-col overflow-y-auto border-r border-edge lg:flex">
+              <div className="border-b border-edge p-3">
+                <div className="aspect-video overflow-hidden rounded bg-black">{monitor}</div>
+              </div>
+              <div className="space-y-3 p-3">
+                <div>
+                  <span className="label">Spoken language</span>
+                  <select value={language} onChange={(e) => setLanguage(e.target.value)} className="select">
+                    <option value="en">English</option>
+                    <option value="hi">Hindi → Hinglish</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="pt">Portuguese</option>
+                  </select>
+                </div>
+                <button className="btn btn-primary w-full justify-center" onClick={handleTranscribe} disabled={busy}>
+                  {busy ? "Transcribing…" : "Auto-transcribe"}
+                </button>
+                {progress && (
+                  <div>
+                    <div className="mb-1 font-mono text-[10px] text-muted">{progress.label}</div>
+                    {typeof progress.percent === "number" && (
+                      <div className="h-1 overflow-hidden rounded-full bg-surface3">
+                        <div className="h-full bg-accent transition-all" style={{ width: `${progress.percent}%` }} />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button className="btn justify-center" onClick={() => srtInput.current?.click()}>Import SRT</button>
+                  <button className="btn justify-center" onClick={handleLoadSample} disabled={busy}>Sample</button>
+                </div>
+                <p className="font-mono text-[10px] leading-relaxed text-muted">
+                  Whisper runs on your device. The first run downloads the model once, then it&apos;s cached.
+                </p>
+              </div>
+            </aside>
+            <main className="flex min-h-0 flex-col">
+              <StageHead title="Script" hint="Correct the words">
                 <PanelTab active={leftTab === "transcript"} onClick={() => setLeftTab("transcript")}>
                   Transcript {cues.length > 0 && <Count n={cues.length} />}
                 </PanelTab>
                 <PanelTab active={leftTab === "notes"} onClick={() => setLeftTab("notes")}>
                   Notes {openNoteCount > 0 && <Count n={openNoteCount} accent />}
                 </PanelTab>
-              </div>
+              </StageHead>
               <div className="min-h-0 flex-1">
                 {leftTab === "transcript" ? (
-                  <TranscriptPanel
-                    cues={cues}
-                    activeId={activeId}
-                    selectedId={selectedId}
-                    onSelect={setSelectedId}
-                    onSeek={onSeek}
-                    onEditText={onEditText}
-                    onSplit={onSplit}
-                    onMerge={onMerge}
-                    onDelete={onDelete}
-                  />
+                  <TranscriptPanel cues={cues} activeId={activeId} selectedId={selectedId} onSelect={setSelectedId} onSeek={onSeek} onEditText={onEditText} onSplit={onSplit} onMerge={onMerge} onDelete={onDelete} />
                 ) : (
-                  <NotesPanel
-                    notes={notes}
-                    noteMode={noteMode}
-                    onToggleMode={() => setNoteMode((m) => !m)}
-                    onSeek={onSeek}
-                    onEdit={editNote}
-                    onToggleResolved={toggleNoteResolved}
-                    onDelete={deleteNote}
-                    onAddAtPlayhead={onAddNoteAtPlayhead}
-                  />
+                  <NotesPanel notes={notes} noteMode={noteMode} onToggleMode={() => setNoteMode((m) => !m)} onSeek={onSeek} onEdit={editNote} onToggleResolved={toggleNoteResolved} onDelete={deleteNote} onAddAtPlayhead={onAddNoteAtPlayhead} />
                 )}
               </div>
-            </section>
+            </main>
+          </div>
+        )}
 
-            <section className="flex min-h-0 flex-col p-4 pb-2">
-              <div className="min-h-0 flex-1">
-                <VideoStage
-                  videoUrl={videoUrl}
-                  cues={cues}
-                  style={style}
-                  seekTo={seekTo}
-                  progress={progress}
-                  onTime={setCurrentTime}
-                  onDuration={setDuration}
-                  timeRef={timeRef}
-                  onVideoEl={(el) => {
-                    videoElRef.current = el;
-                  }}
-                  onPlayingChange={(p) => {
-                    playingRef.current = p;
-                  }}
-                  notes={notes}
-                  noteMode={noteMode}
-                  onAddNote={onAddNoteAt}
-                  onSeekNote={onSeek}
-                />
-              </div>
-            </section>
+        {stage === "cut" && hasMedia && (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[260px_1fr]">
+              <aside className="hidden min-h-0 border-r border-edge lg:block">
+                <TranscriptPanel cues={cues} activeId={activeId} selectedId={selectedId} onSelect={setSelectedId} onSeek={onSeek} onEditText={onEditText} onSplit={onSplit} onMerge={onMerge} onDelete={onDelete} />
+              </aside>
+              <section className="flex min-h-0 flex-col p-4">
+                <div className="min-h-0 flex-1">{monitor}</div>
+              </section>
+            </div>
+            <div className="shrink-0 border-t border-edge bg-surface/60">
+              <Timeline cues={cues} duration={effectiveDuration} selectedId={selectedId} timeRef={timeRef} playingRef={playingRef} peaks={peaks} onSelect={setSelectedId} onSeek={onSeek} onRetime={onRetime} onSplitAt={onSplitAt} onDeleteCue={onDelete} onAddAt={onAddAt} />
+            </div>
+          </div>
+        )}
 
-            <section className="hidden min-h-0 flex-col border-l border-edge bg-surface/60 lg:flex">
-              <PanelHeader>Style</PanelHeader>
+        {stage === "type" && hasMedia && (
+          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1fr_360px]">
+            <section className="flex min-h-0 flex-col p-4">
+              <div className="min-h-0 flex-1">{monitor}</div>
+            </section>
+            <aside className="hidden min-h-0 flex-col border-l border-edge lg:flex">
+              <StageHead title="Type" hint="Set the look" />
               <div className="min-h-0 flex-1">
                 <StylePanel style={style} onChange={handleStyleChange} onPreset={handlePreset} />
               </div>
-            </section>
-          </main>
-
-          <div className="shrink-0 border-t border-edge bg-surface/80">
-            <Timeline
-              cues={cues}
-              duration={effectiveDuration}
-              selectedId={selectedId}
-              timeRef={timeRef}
-              playingRef={playingRef}
-              peaks={peaks}
-              onSelect={setSelectedId}
-              onSeek={onSeek}
-              onRetime={onRetime}
-              onSplitAt={onSplitAt}
-              onDeleteCue={onDelete}
-              onAddAt={onAddAt}
-            />
+            </aside>
           </div>
-        </>
-      )}
+        )}
 
-      {showLibrary && (
-        <ProjectLibrary
-          projects={projects}
-          currentId={projectId}
-          onOpen={openProject}
-          onDelete={handleDeleteProject}
-          onNew={newProject}
-          onClose={() => setShowLibrary(false)}
-        />
-      )}
+        {stage === "export" && hasMedia && (
+          <div className="grid h-full min-h-0 grid-cols-1 place-items-center gap-8 p-8 lg:grid-cols-2">
+            <div className="w-full max-w-sm lg:justify-self-end">
+              <div className="aspect-video overflow-hidden rounded-lg border border-edge bg-black">{monitor}</div>
+            </div>
+            <div className="w-full max-w-sm">
+              <span className="eyebrow">Export</span>
+              <h2 className="mt-1.5 font-display text-2xl font-semibold">Deliver captions</h2>
+              <p className="mt-2 text-sm text-muted">
+                {cues.length} cues · {effectiveDuration.toFixed(1)}s
+              </p>
+              <div className="mt-5 space-y-2">
+                <button className="btn btn-primary w-full justify-center" onClick={handleExportSrt} disabled={!cues.length}>
+                  Export .srt
+                </button>
+                <button className="btn w-full cursor-not-allowed justify-center opacity-50" disabled>
+                  Burn-in .mp4 — next build
+                </button>
+              </div>
+              <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
+                The preview is pixel-identical to the eventual burn-in — the same engine renders both.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <StageRail stage={stage} onChange={setStage} hasMedia={hasMedia} />
+
+      {/* hidden SRT importer (used by the Script room) */}
+      <input
+        ref={srtInput}
+        type="file"
+        accept=".srt,text/plain"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (f) handleImportSrt(await f.text());
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
@@ -726,11 +802,45 @@ function captureThumb(video: HTMLVideoElement): string | null {
   }
 }
 
-function PanelHeader({ children }: { children: React.ReactNode }) {
+function StageHead({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center border-b border-edge px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
-      {children}
+    <div className="flex items-center gap-3 border-b border-edge px-3 py-2">
+      <span className="font-display text-[13px] font-semibold text-ink">{title}</span>
+      {hint && <span className="eyebrow">{hint}</span>}
+      {children && <div className="ml-auto flex gap-1">{children}</div>}
     </div>
+  );
+}
+
+function TopBtn({
+  children,
+  title,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="flex h-7 w-7 items-center justify-center rounded-sm text-muted transition-colors hover:bg-surface2 hover:text-ink disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }
 

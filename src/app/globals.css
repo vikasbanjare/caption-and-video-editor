@@ -4,37 +4,23 @@
 
 /* --- semantic tokens (RGB channels) --------------------------------------- */
 :root {
-  /* Studio — warm near-black (the editor). NOT blue-black. */
-  --bg: 23 20 15;
-  --surface: 28 24 19;
-  --surface-2: 34 30 24;
-  --surface-3: 42 37 30;
-  --edge: 50 44 36;
-  --edge-2: 68 60 49;
-  --ink: 236 230 218;
-  --muted: 156 146 131;
-  --accent: 249 75 30; /* vermilion — the CutPilot mark */
+  /* Graphite — a professional NLE surround (Premiere/Resolve register). Near-
+     neutral, faintly cool, deeply desaturated so the monitor + media read. */
+  --bg: 13 14 16;
+  --surface: 19 21 24;
+  --surface-2: 25 28 32;
+  --surface-3: 33 37 42;
+  --edge: 38 43 49;
+  --edge-2: 54 61 69;
+  --ink: 226 230 234;
+  --muted: 132 141 151;
+  --accent: 249 75 30; /* vermilion — the single signal colour */
   --accent-2: 255 122 82;
 
-  --r-sm: 6px;
-  --r: 10px;
-  --r-lg: 14px;
+  --r-sm: 5px;
+  --r: 8px;
+  --r-lg: 12px;
   color-scheme: dark;
-}
-
-/* Paper — warm bone/ivory (the landing). */
-.theme-paper {
-  --bg: 244 241 233;
-  --surface: 249 246 240;
-  --surface-2: 238 233 224;
-  --surface-3: 230 224 212;
-  --edge: 220 213 200;
-  --edge-2: 199 190 174;
-  --ink: 24 20 15;
-  --muted: 120 110 96;
-  --accent: 240 68 24;
-  --accent-2: 200 52 14;
-  color-scheme: light;
 }
 
 html,

@@ -1,15 +1,32 @@
 ---
 name: cutpilot-design
-description: The CutPilot design language — a premium, editorial, deliberately non-generic system. Load this BEFORE building or restyling ANY CutPilot UI (landing, editor, panels, buttons, states). It exists to keep the product from drifting into the default "AI SaaS" look (purple gradient, glow, glassmorphism, Inter, hero + 3 cards).
+description: The CutPilot design language — a professional caption NLE (like Premiere/DaVinci), NOT a website. Load this BEFORE building or restyling ANY CutPilot UI (console, stages, panels, timeline, monitor, buttons). It exists to keep the product an *application* and out of the generic "AI SaaS website" look (purple gradient, glow, glassmorphism, Inter, hero + 3 cards + marquee).
 ---
 
-# CutPilot Design — The Caption Instrument
+# CutPilot Design — a caption NLE, not a website
 
-CutPilot is a tool about **typography** (captions). The brand should therefore
-*be* typographic and confident. The aesthetic is **editorial / Swiss-print
-studio**: oversized type, a strict grid used with tasteful asymmetry, hairline
-rules, generous negative space, a restrained palette with a single signal
-accent, and mono micro-labels. Print, not dashboard.
+CutPilot is a **professional editing application**, operated like Premiere or
+DaVinci Resolve — dense, monitor-first, keyboard-driven. It has **no landing
+page, no marketing hero, no decorative specimens**. DaVinci earned its place by
+re-thinking the *workflow* (its "Pages"), not by being pretty; that is the bar.
+
+## The paradigm — Stage rooms (our "Pages")
+
+The whole app is organised as **stages** switched from a bottom rail (like
+DaVinci's page rail), each a workspace laid out for one craft:
+`Ingest · Script · Cut · Type · Export`. The front door is a **Project console**
+(a dark project manager: your projects as cards + "new from media"), never a
+marketing landing. Actions are **contextual to the stage** they belong to, not
+piled into one top toolbar.
+
+## Look & feel
+
+- **Application chrome, not web chrome**: slim bars, dense panels, hairline
+  dividers, mono micro-labels/timecodes. The monitor and timeline are the heroes;
+  chrome is quiet and recedes so the media reads.
+- Typography still carries identity (we are a caption tool): **Fraunces** for the
+  wordmark, stage numbers and project titles; **Hanken Grotesk** for UI (never
+  Inter); **JetBrains Mono** for labels/timecodes/indices.
 
 ## Non-negotiables (how we avoid the generic AI look)
 
