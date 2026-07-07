@@ -174,6 +174,8 @@ function toStyle(t: RawTemplate): CaptionStyle {
     marginV: layout === "top" ? 0.1 : 0.14,
     maxWidth: t.maxLines === 1 ? 0.9 : 0.86,
     cornerRadius,
+    offsetX: 0,
+    offsetY: 0,
 
     backgroundColor: t.boxColor || "",
     boxColor2: t.boxColor2 || "",

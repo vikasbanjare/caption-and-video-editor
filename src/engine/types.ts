@@ -112,6 +112,9 @@ export interface CaptionStyle {
   marginV: number; // fraction of height
   maxWidth: number; // fraction of width
   cornerRadius: number; // fraction of font px (pills/boxes)
+  /** free-drag offset from the anchored position, as fractions of the frame */
+  offsetX: number;
+  offsetY: number;
 
   // --- line background box / button pill ---
   backgroundColor: string; // "" = none

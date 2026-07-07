@@ -30,6 +30,13 @@ import {
 } from "@/lib/transcribe-browser";
 import { computePeaks } from "@/lib/waveform";
 import {
+  removeFillerWords,
+  generateChapters,
+  chaptersToText,
+  formatTimestamp,
+  type Chapter,
+} from "@/lib/tools";
+import {
   initStore,
   listProjects,
   saveProject,
@@ -81,6 +88,8 @@ export default function Editor() {
   const [thumb, setThumb] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("ingest");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [safeZones, setSafeZones] = useState(false);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
   const srtInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -409,6 +418,36 @@ export default function Editor() {
     [style, finalize, commit]
   );
 
+  // ---- Pulse tools -----------------------------------------------------------
+  const handleCleanUp = useCallback(() => {
+    const { cues: next, removed } = removeFillerWords(cuesRef.current);
+    if (removed === 0) {
+      setStatus("No filler words or stutters found.");
+      return;
+    }
+    commit(applyKeywordHighlight(next));
+    setStatus(`Removed ${removed} filler${removed > 1 ? "s" : ""} / stutter${removed > 1 ? "s" : ""}.`);
+  }, [commit]);
+
+  const handleChapters = useCallback(() => {
+    const ch = generateChapters(cuesRef.current);
+    setChapters(ch);
+    setStatus(ch.length ? `Generated ${ch.length} chapters.` : "Add captions first.");
+  }, []);
+
+  const copyChapters = useCallback(() => {
+    navigator.clipboard?.writeText(chaptersToText(chapters)).then(
+      () => setStatus("Chapters copied to clipboard."),
+      () => setStatus("Couldn't copy — select and copy manually.")
+    );
+  }, [chapters]);
+
+  const resetCaptionPos = useCallback(() => {
+    handleStyleChange({ offsetX: 0, offsetY: 0 });
+    setStatus("Caption position reset.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleExportSrt = useCallback(() => {
     const blob = new Blob([serializeSRT(cuesRef.current)], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -617,6 +656,8 @@ export default function Editor() {
       noteMode={noteMode}
       onAddNote={onAddNoteAt}
       onSeekNote={onSeek}
+      onStyleChange={handleStyleChange}
+      safeZones={safeZones}
     />
   ) : null;
 
@@ -711,6 +752,43 @@ export default function Editor() {
                 <p className="font-mono text-[10px] leading-relaxed text-muted">
                   Whisper runs on your device. The first run downloads the model once, then it&apos;s cached.
                 </p>
+
+                {/* transcript tools */}
+                <div className="border-t border-edge pt-3">
+                  <span className="label">Tools</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className="btn justify-center" onClick={handleCleanUp} disabled={!cues.length} title="Remove um / uh / stutters">
+                      Clean up
+                    </button>
+                    <button className="btn justify-center" onClick={handleChapters} disabled={!cues.length} title="Auto-chapters from the transcript">
+                      Chapters
+                    </button>
+                  </div>
+                  {chapters.length > 0 && (
+                    <div className="mt-2 rounded border border-edge bg-surface2">
+                      <div className="flex items-center justify-between border-b border-edge px-2.5 py-1.5">
+                        <span className="font-mono text-[10px] uppercase tracking-label text-muted">
+                          {chapters.length} chapters
+                        </span>
+                        <button onClick={copyChapters} className="font-mono text-[10px] text-accent2 hover:underline">
+                          Copy
+                        </button>
+                      </div>
+                      <div className="scroll-thin max-h-40 overflow-y-auto p-1.5">
+                        {chapters.map((c, i) => (
+                          <button
+                            key={i}
+                            onClick={() => onSeek(c.start)}
+                            className="flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left hover:bg-surface3"
+                          >
+                            <span className="font-mono text-[10px] text-accent2">{formatTimestamp(c.start)}</span>
+                            <span className="truncate text-xs text-ink">{c.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </aside>
             <main className="flex min-h-0 flex-col">
@@ -755,7 +833,24 @@ export default function Editor() {
               <div className="min-h-0 flex-1">{monitor}</div>
             </section>
             <aside className="hidden min-h-0 flex-col border-l border-edge lg:flex">
-              <StageHead title="Type" hint="Set the look" />
+              <StageHead title="Type" hint="Drag caption on the monitor to move">
+                <button
+                  onClick={resetCaptionPos}
+                  className="rounded-sm px-2 py-1 font-mono text-[10px] uppercase tracking-label text-muted hover:text-ink"
+                  title="Reset caption position"
+                >
+                  Reset pos
+                </button>
+                <button
+                  onClick={() => setSafeZones((s) => !s)}
+                  className={`rounded-sm px-2 py-1 font-mono text-[10px] uppercase tracking-label transition-colors ${
+                    safeZones ? "bg-accent text-white" : "text-muted hover:text-ink"
+                  }`}
+                  title="Toggle safe-zone guides"
+                >
+                  Safe zones
+                </button>
+              </StageHead>
               <div className="min-h-0 flex-1">
                 <StylePanel style={style} onChange={handleStyleChange} onPreset={handlePreset} />
               </div>

@@ -120,6 +120,8 @@ export function renderFrame({
   if (style.position === "top") topY = margin;
   else if (style.position === "center") topY = (height - blockH) / 2;
   else topY = height - margin - blockH;
+  topY += (style.offsetY || 0) * height; // free-drag vertical offset
+  const shiftX = (style.offsetX || 0) * width; // free-drag horizontal offset
 
   // cue-level exit fade
   const exitP = clamp01((cue.end - time) / EXIT);
@@ -128,7 +130,7 @@ export function renderFrame({
   // ---- positioned words + per-word entrance ----------------------------------
   const laid: LaidWord[] = [];
   lines.forEach((ln, li) => {
-    let x = (width - ln.w) / 2;
+    let x = (width - ln.w) / 2 + shiftX;
     const y = topY + li * lineH + fontPx;
     for (const it of ln.items) {
       laid.push({
@@ -151,7 +153,7 @@ export function renderFrame({
       const padX = fontPx * 0.42 * pad;
       const padY = fontPx * 0.24 * pad;
       const bw = ln.w + padX * 2;
-      const bx = (width - bw) / 2;
+      const bx = (width - bw) / 2 + shiftX;
       const by = topY + li * lineH + (lineH - fontPx) / 2 - padY;
       const bh = fontPx + padY * 2;
       // move the pill with the line's entrance (words on a line share it)

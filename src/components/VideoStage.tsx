@@ -31,6 +31,10 @@ interface Props {
   noteMode?: boolean;
   onAddNote?: (x: number, y: number, t: number) => void;
   onSeekNote?: (t: number) => void;
+  /** live style edits from direct manipulation (drag caption) */
+  onStyleChange?: (patch: Partial<CaptionStyle>) => void;
+  /** draw title-safe + social-UI safe-zone guides */
+  safeZones?: boolean;
 }
 
 /**
@@ -52,10 +56,20 @@ export default function VideoStage({
   noteMode,
   onAddNote,
   onSeekNote,
+  onStyleChange,
+  safeZones,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pinLayerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    sx: number;
+    sy: number;
+    ox: number;
+    oy: number;
+    moved: boolean;
+  } | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -94,6 +108,7 @@ export default function VideoStage({
         if (ctx) {
           fitCanvas(canvas, video);
           if (pinLayerRef.current) placeOverVideo(pinLayerRef.current, video);
+          if (overlayRef.current) placeOverVideo(overlayRef.current, video);
           const t = video.currentTime;
           if (timeRef) timeRef.current = t;
           renderFrame({
@@ -132,6 +147,54 @@ export default function VideoStage({
   const onScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current;
     if (v) v.currentTime = Number(e.target.value);
+  };
+
+  // approximate on-screen box of the caption, for the drag handle
+  const capBox = () => {
+    const w = Math.min(0.98, style.maxWidth + 0.06);
+    const h = 0.26;
+    let cy =
+      style.position === "top"
+        ? style.marginV + 0.1
+        : style.position === "center"
+          ? 0.5
+          : 1 - style.marginV - 0.1;
+    cy += style.offsetY || 0;
+    const cx = 0.5 + (style.offsetX || 0);
+    return {
+      left: `${(cx - w / 2) * 100}%`,
+      top: `${(cy - h / 2) * 100}%`,
+      width: `${w * 100}%`,
+      height: `${h * 100}%`,
+    };
+  };
+  const startCapDrag = (e: React.PointerEvent) => {
+    if (noteMode || !onStyleChange) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = {
+      sx: e.clientX,
+      sy: e.clientY,
+      ox: style.offsetX || 0,
+      oy: style.offsetY || 0,
+      moved: false,
+    };
+  };
+  const moveCapDrag = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    const v = videoRef.current;
+    if (!d || !v || !onStyleChange) return;
+    const rect = v.getBoundingClientRect();
+    if (rect.width === 0) return;
+    if (Math.abs(e.clientX - d.sx) > 3 || Math.abs(e.clientY - d.sy) > 3) d.moved = true;
+    onStyleChange({
+      offsetX: clampOff(d.ox + (e.clientX - d.sx) / rect.width),
+      offsetY: clampOff(d.oy + (e.clientY - d.sy) / rect.height),
+    });
+  };
+  const endCapDrag = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (d && !d.moved) togglePlay(); // a plain click still toggles playback
   };
 
   const pct = duration ? (Math.min(time, duration) / duration) * 100 : 0;
@@ -175,6 +238,35 @@ export default function VideoStage({
             }}
           />
           <canvas ref={canvasRef} className="pointer-events-none absolute" />
+
+          {/* caption drag handle + safe-zone guides (sized to the video box) */}
+          <div ref={overlayRef} className="pointer-events-none absolute">
+            {safeZones && (
+              <>
+                {/* title-safe (10%) + action-safe (5%) */}
+                <div className="absolute inset-[5%] rounded-sm border border-white/20" />
+                <div className="absolute inset-[10%] border border-dashed border-white/25" />
+                {/* social caption band + right-rail UI (Reels/TikTok) */}
+                <div className="absolute inset-x-0 bottom-0 h-[18%] bg-white/[0.03]" />
+                <div className="absolute bottom-[14%] right-[6%] top-[40%] w-[10%] rounded-md border border-dashed border-white/15" />
+              </>
+            )}
+            {onStyleChange && cues.length > 0 && !noteMode && (
+              <div
+                onPointerDown={startCapDrag}
+                onPointerMove={moveCapDrag}
+                onPointerUp={endCapDrag}
+                onPointerCancel={endCapDrag}
+                title="Drag to move the caption"
+                className="group pointer-events-auto absolute cursor-move rounded border border-transparent transition-colors hover:border-accent/70 hover:bg-accent/5"
+                style={capBox()}
+              >
+                <span className="absolute -top-5 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-sm bg-accent px-1.5 py-0.5 font-mono text-[9px] text-white group-hover:block">
+                  drag to move
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* frame-note pins (positioned within the video box) */}
           <div ref={pinLayerRef} className="pointer-events-none absolute">
@@ -273,6 +365,7 @@ export default function VideoStage({
 }
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
+const clampOff = (n: number) => (n < -0.45 ? -0.45 : n > 0.45 ? 0.45 : n);
 
 /** Position an absolutely-placed overlay to exactly cover the video's box. */
 function placeOverVideo(el: HTMLElement, video: HTMLVideoElement) {

@@ -143,6 +143,25 @@ export default function StylePanel({ style, onChange, onPreset }: Props) {
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <Range
+                label={`Nudge X ${Math.round(style.offsetX * 100)}`}
+                min={-0.45}
+                max={0.45}
+                step={0.01}
+                value={style.offsetX}
+                onChange={(v) => onChange({ offsetX: v })}
+              />
+              <Range
+                label={`Nudge Y ${Math.round(style.offsetY * 100)}`}
+                min={-0.45}
+                max={0.45}
+                step={0.01}
+                value={style.offsetY}
+                onChange={(v) => onChange({ offsetY: v })}
+              />
+            </div>
+
             <label className="flex items-center justify-between rounded-lg border border-edge bg-surface2 px-3 py-2">
               <span>UPPERCASE</span>
               <input
