@@ -26,14 +26,26 @@ export interface Transcript {
   language?: string;
 }
 
+/** Pulse's built-in animation catalog (ported from the Premiere plugin). */
 export type AnimationKind =
   | "none"
   | "fade"
   | "pop"
+  | "scale"
+  | "zoom"
+  | "zoompunch"
   | "bounce"
   | "slide-up"
+  | "glide"
+  | "wave"
+  | "shake"
+  | "glitch"
+  | "whoosh"
+  | "blurdissolve"
   | "karaoke"
-  | "word-by-word";
+  | "reveal"
+  | "word-by-word"
+  | "typewriter";
 
 export type CaptionPosition = "top" | "center" | "bottom";
 

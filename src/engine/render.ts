@@ -6,10 +6,12 @@ import type { Cue, CaptionStyle, Word } from "./types";
  * browser (preview) and on the server (export): "preview === export". All sizes
  * derive from the canvas height, so output is resolution-independent.
  *
- * Supports the full CutPilot template feature set: gradient + glossy text,
- * spoken/keyword emphasis via colour, boxed pill, or underline bar, dimmed
- * upcoming words, active-word scaling, and decorated background pills / buttons
- * (gradient, stroke, glow, 3D extrude, gloss sheen, drop shadow).
+ * Ports the full CutPilot / "Pulse" caption engine: gradient + glossy text,
+ * spoken/keyword emphasis (colour / boxed pill / underline bar), dimmed
+ * upcoming words, active-word scaling, decorated pills & buttons (gradient,
+ * stroke, glow, 3D extrude, gloss, shadow), and Pulse's animation catalog
+ * (pop, scale, zoom, zoompunch, bounce, slide, glide, wave, shake, glitch,
+ * whoosh, blur-dissolve, reveal, karaoke, typewriter, fade).
  */
 
 export type Ctx2D = CanvasRenderingContext2D;
@@ -23,7 +25,7 @@ export interface RenderInput {
   height: number;
 }
 
-const ENTER = 0.18;
+const ENTER = 0.26; // cue-level entrance window (s)
 const EXIT = 0.1;
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
@@ -35,6 +37,14 @@ const easeOutBack = (t: number) => {
 };
 const easeBounce = (t: number) => 1 + 0.16 * Math.sin(Math.min(1, t) * Math.PI);
 
+interface Entrance {
+  hidden: boolean;
+  scale: number;
+  dx: number;
+  dy: number;
+  alpha: number;
+}
+
 interface LaidWord {
   word: Word;
   display: string;
@@ -42,6 +52,7 @@ interface LaidWord {
   y: number;
   w: number;
   line: number;
+  en: Entrance;
 }
 
 export function renderFrame({
@@ -59,13 +70,13 @@ export function renderFrame({
   const maxW = style.maxWidth * width;
   const disp = (w: Word) => (style.uppercase ? w.text.toUpperCase() : w.text);
 
-  // ---- single-line button pills: shrink to fit -------------------------------
+  // single-line button pills: shrink to fit
   if (style.maxLines === 1) {
     setBaseFont(ctx, style, fontPx);
-    const space = ctx.measureText(" ").width;
+    const sp = ctx.measureText(" ").width;
     let total = 0;
     cue.words.forEach((w, i) => {
-      total += ctx.measureText(disp(w)).width + (i ? space : 0);
+      total += ctx.measureText(disp(w)).width + (i ? sp : 0);
     });
     if (total > maxW) fontPx = Math.max(8, fontPx * (maxW / total) * 0.98);
   }
@@ -110,22 +121,25 @@ export function renderFrame({
   else if (style.position === "center") topY = (height - blockH) / 2;
   else topY = height - margin - blockH;
 
-  // ---- cue-level entrance/exit ----------------------------------------------
-  const enterP = clamp01((time - cue.start) / ENTER);
+  // cue-level exit fade
   const exitP = clamp01((cue.end - time) / EXIT);
-  let alpha = exitP < 1 ? exitP : 1;
-  let slideY = 0;
-  if (style.animation === "fade") alpha = Math.min(enterP, exitP);
-  if (style.animation === "slide-up")
-    slideY = (1 - easeOut(enterP)) * 0.06 * height;
+  const cueAlpha = exitP;
 
-  // ---- positioned words ------------------------------------------------------
+  // ---- positioned words + per-word entrance ----------------------------------
   const laid: LaidWord[] = [];
   lines.forEach((ln, li) => {
     let x = (width - ln.w) / 2;
-    const y = topY + li * lineH + fontPx + slideY;
+    const y = topY + li * lineH + fontPx;
     for (const it of ln.items) {
-      laid.push({ word: it.word, display: it.display, x, y, w: it.w, line: li });
+      laid.push({
+        word: it.word,
+        display: it.display,
+        x,
+        y,
+        w: it.w,
+        line: li,
+        en: entranceFor(it.word, cue, time, style, width, height),
+      });
       x += it.w + space;
     }
   });
@@ -138,44 +152,61 @@ export function renderFrame({
       const padY = fontPx * 0.24 * pad;
       const bw = ln.w + padX * 2;
       const bx = (width - bw) / 2;
-      const by = topY + li * lineH + slideY + (lineH - fontPx) / 2 - padY;
+      const by = topY + li * lineH + (lineH - fontPx) / 2 - padY;
       const bh = fontPx + padY * 2;
-      drawBox(ctx, bx, by, bw, bh, fontPx, style, alpha);
+      // move the pill with the line's entrance (words on a line share it)
+      const en = laid.find((l) => l.line === li)?.en;
+      const a = cueAlpha * (en ? en.alpha : 1);
+      ctx.save();
+      ctx.translate(en?.dx ?? 0, en?.dy ?? 0);
+      drawBox(ctx, bx, by, bw, bh, fontPx, style, a);
+      ctx.restore();
     });
   }
 
   // ---- emphasis box / bar behind or under the emphasised word ----------------
   for (const lw of laid) {
-    if (!isEmphasised(lw.word, time, style)) continue;
-    const scale = wordScale(lw.word, time, style);
+    if (lw.en.hidden || !isEmphasised(lw.word, time, style)) continue;
+    const s = lw.en.scale * emphasisScale(lw.word, time, style);
     if (style.highlightMode === "box") {
       const padX = fontPx * 0.22;
       const padY = fontPx * 0.14;
-      const bx = lw.x - padX;
-      const by = lw.y - fontPx * 0.78 - padY;
-      const bw = lw.w + padX * 2;
-      const bh = fontPx * 0.86 + padY * 2;
-      withScale(ctx, lw, fontPx, scale, () => {
+      drawTransformed(ctx, lw, fontPx, s, () => {
         ctx.save();
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = cueAlpha * lw.en.alpha;
         ctx.fillStyle = style.activeBoxColor;
-        roundRect(ctx, bx, by, bw, bh, fontPx * style.cornerRadius);
+        roundRect(
+          ctx,
+          lw.x - padX,
+          lw.y - fontPx * 0.78 - padY,
+          lw.w + padX * 2,
+          fontPx * 0.86 + padY * 2,
+          fontPx * style.cornerRadius
+        );
         ctx.fill();
         ctx.restore();
       });
     } else if (style.highlightMode === "bar") {
-      const by = lw.y + fontPx * 0.12;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = style.activeWordColor;
-      roundRect(ctx, lw.x, by, lw.w, Math.max(2, fontPx * 0.09), fontPx * 0.05);
-      ctx.fill();
-      ctx.restore();
+      drawTransformed(ctx, lw, fontPx, s, () => {
+        ctx.save();
+        ctx.globalAlpha = cueAlpha * lw.en.alpha;
+        ctx.fillStyle = style.activeWordColor;
+        roundRect(
+          ctx,
+          lw.x,
+          lw.y + fontPx * 0.12,
+          lw.w,
+          Math.max(2, fontPx * 0.09),
+          fontPx * 0.05
+        );
+        ctx.fill();
+        ctx.restore();
+      });
     }
   }
 
   // ---- words -----------------------------------------------------------------
-  for (const lw of laid) drawWord(ctx, lw, style, time, fontPx, alpha);
+  for (const lw of laid) drawWord(ctx, lw, style, time, fontPx, cueAlpha);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,42 +219,34 @@ function drawWord(
   fontPx: number,
   cueAlpha: number
 ): void {
-  const { word } = lw;
-  const spoken = time >= word.start;
+  const { word, en } = lw;
+  if (en.hidden) return;
   const emph = isEmphasised(word, time, style);
+  const spoken = time >= word.start;
 
-  let wordAlpha = cueAlpha;
-  if (style.animation === "word-by-word") {
-    if (!spoken) return;
-    wordAlpha *= clamp01((time - word.start) / 0.1);
-  } else if (style.upcomingOpacity < 1 && !spoken) {
+  let wordAlpha = cueAlpha * en.alpha;
+  if (style.upcomingOpacity < 1 && !spoken && style.animation !== "word-by-word")
     wordAlpha *= style.upcomingOpacity;
-  }
 
-  const scale = wordScale(word, time, style);
+  const scale = en.scale * emphasisScale(word, time, style);
   const useKeywordFont = emph && style.keywordFontFamily;
 
-  withScale(ctx, lw, fontPx, scale, () => {
+  drawTransformed(ctx, lw, fontPx, scale, () => {
     ctx.save();
     ctx.globalAlpha = wordAlpha;
     if (useKeywordFont) {
       ctx.font = `${style.keywordItalic ? "italic " : ""}${style.fontWeight} ${fontPx}px ${style.keywordFontFamily}`;
     }
 
-    // shadow / glow
     if (style.glow > 0 && (emph || style.emphasis !== "keyword")) {
       ctx.shadowColor = style.glowColor;
       ctx.shadowBlur = style.glow * fontPx * 1.3;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
     } else if (style.shadowBlur > 0) {
       ctx.shadowColor = style.shadowColor;
       ctx.shadowBlur = style.shadowBlur * fontPx;
-      ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = fontPx * 0.045;
     }
 
-    // outline
     if (style.strokeColor && style.strokeWidth > 0) {
       ctx.lineJoin = "round";
       ctx.lineWidth = style.strokeWidth * fontPx;
@@ -231,14 +254,12 @@ function drawWord(
       ctx.strokeText(lw.display, lw.x, lw.y);
     }
 
-    // fill (solid / vertical gradient / emphasised colour)
     ctx.fillStyle = fillFor(ctx, lw, style, fontPx, emph);
     ctx.fillText(lw.display, lw.x, lw.y);
     if (style.glow > 0 && (emph || style.emphasis !== "keyword")) {
-      ctx.fillText(lw.display, lw.x, lw.y); // second pass strengthens glow
+      ctx.fillText(lw.display, lw.x, lw.y);
     }
 
-    // gloss sheen
     if (style.gloss) {
       ctx.shadowBlur = 0;
       const top = lw.y - fontPx * 0.72;
@@ -250,6 +271,109 @@ function drawWord(
     }
     ctx.restore();
   });
+}
+
+// ---- animation catalog (Pulse engine) -------------------------------------
+
+function entranceFor(
+  word: Word,
+  cue: Cue,
+  time: number,
+  style: CaptionStyle,
+  w: number,
+  h: number
+): Entrance {
+  const a = style.animation;
+  const base: Entrance = { hidden: false, scale: 1, dx: 0, dy: 0, alpha: 1 };
+
+  // per-word reveal animations
+  if (a === "word-by-word" || a === "reveal" || a === "typewriter") {
+    if (time < word.start)
+      return a === "typewriter"
+        ? { ...base, hidden: true }
+        : { ...base, hidden: true };
+    const p = clamp01((time - word.start) / 0.12);
+    return {
+      hidden: false,
+      scale: a === "reveal" ? easeOutBack(Math.min(1, p * 1.4)) : 0.9 + 0.1 * easeOut(p),
+      dx: 0,
+      dy: 0,
+      alpha: a === "typewriter" ? 1 : p,
+    };
+  }
+
+  const p = clamp01((time - cue.start) / ENTER);
+  const done = p >= 1;
+  switch (a) {
+    case "pop":
+      return { ...base, scale: easeOutBack(Math.min(1, p * 1.4)) };
+    case "bounce":
+      return { ...base, scale: easeBounce(p) };
+    case "scale":
+      return { ...base, scale: 0.7 + 0.3 * easeOut(p), alpha: Math.min(1, p * 1.6) };
+    case "zoom":
+      return { ...base, scale: 1.6 - 0.6 * easeOut(p), alpha: Math.min(1, p * 2) };
+    case "zoompunch":
+      return { ...base, scale: 1.9 - 0.9 * easeOut(Math.min(1, p * 1.4)) };
+    case "slide-up":
+      return { ...base, dy: (1 - easeOut(p)) * 0.07 * h, alpha: Math.min(1, p * 1.6) };
+    case "glide":
+      return { ...base, dy: (1 - easeOut(p)) * 0.05 * h, alpha: Math.min(1, p * 1.6) };
+    case "wave":
+      return { ...base, dy: done ? 0 : Math.sin(p * Math.PI) * -0.035 * h };
+    case "shake":
+      return { ...base, dx: done ? 0 : Math.sin(time * 55) * (1 - p) * 0.02 * w };
+    case "whoosh":
+      return {
+        ...base,
+        dx: (1 - easeOut(p)) * -0.28 * w,
+        scale: 1 + (1 - p) * 0.08,
+        alpha: Math.min(1, p * 2),
+      };
+    case "blurdissolve":
+      return { ...base, scale: 0.95 + 0.05 * p, alpha: p };
+    case "glitch":
+      if (done) return base;
+      return {
+        ...base,
+        dx: Math.sin(time * 90) * 0.012 * w,
+        alpha: Math.floor(time * 30) % 2 ? 0.6 : 1,
+      };
+    case "fade":
+      return { ...base, alpha: p };
+    default:
+      return base; // none, karaoke
+  }
+}
+
+function emphasisScale(word: Word, time: number, style: CaptionStyle): number {
+  if (!isEmphasised(word, time, style) || style.activeScale === 1) return 1;
+  if (style.emphasis === "keyword") return style.activeScale;
+  const prog = clamp01((time - word.start) / Math.max(0.08, word.end - word.start));
+  return 1 + (style.activeScale - 1) * easeOut(prog);
+}
+
+function drawTransformed(
+  ctx: Ctx2D,
+  lw: LaidWord,
+  fontPx: number,
+  scale: number,
+  draw: () => void
+): void {
+  const { dx, dy } = lw.en;
+  if (scale === 1 && dx === 0 && dy === 0) {
+    draw();
+    return;
+  }
+  const cx = lw.x + lw.w / 2;
+  const cy = lw.y - fontPx * 0.34;
+  ctx.save();
+  ctx.translate(dx, dy);
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  ctx.translate(-cx, -cy);
+  draw();
+  ctx.restore();
 }
 
 function fillFor(
@@ -271,8 +395,7 @@ function fillFor(
     }
     return style.activeWordColor;
   }
-  if (!emph && style.emphasis === "keyword" && word_isKeyword(lw.word)) {
-    // a keyword that isn't the *active* one still gets the accent colour
+  if (!emph && style.emphasis === "keyword" && lw.word.highlight) {
     return style.highlightColor;
   }
   if (style.color2) {
@@ -284,53 +407,10 @@ function fillFor(
   return style.color;
 }
 
-function word_isKeyword(w: Word): boolean {
-  return !!w.highlight;
-}
-
 function isEmphasised(word: Word, time: number, style: CaptionStyle): boolean {
   return style.emphasis === "keyword"
     ? !!word.highlight
     : time >= word.start && time < word.end;
-}
-
-function wordScale(word: Word, time: number, style: CaptionStyle): number {
-  let s = 1;
-  const cur = time >= word.start && time < word.end;
-  const prog = clamp01((time - word.start) / Math.max(0.08, word.end - word.start));
-  if (style.animation === "pop" && cur) s *= easeOutBack(Math.min(1, prog * 1.5));
-  else if (style.animation === "bounce" && cur) s *= easeBounce(prog);
-  else if (style.animation === "word-by-word" && time >= word.start)
-    s *= 0.82 + 0.18 * easeOut(clamp01((time - word.start) / 0.12));
-
-  if (isEmphasised(word, time, style) && style.activeScale !== 1) {
-    s *=
-      style.emphasis === "keyword"
-        ? style.activeScale
-        : 1 + (style.activeScale - 1) * easeOut(prog);
-  }
-  return s;
-}
-
-function withScale(
-  ctx: Ctx2D,
-  lw: LaidWord,
-  fontPx: number,
-  scale: number,
-  draw: () => void
-): void {
-  if (scale === 1) {
-    draw();
-    return;
-  }
-  const cx = lw.x + lw.w / 2;
-  const cy = lw.y - fontPx * 0.34;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(scale, scale);
-  ctx.translate(-cx, -cy);
-  draw();
-  ctx.restore();
 }
 
 // ---- background box / button pill -----------------------------------------
@@ -351,7 +431,6 @@ function drawBox(
 ): void {
   const r = fontPx * style.cornerRadius;
 
-  // drop shadow
   if (style.boxShadow) {
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -364,7 +443,6 @@ function drawBox(
     ctx.restore();
   }
 
-  // 3D extruded back edge
   if (style.box3d) {
     const depth = (style.box3dDepth || 0.12) * fontPx;
     ctx.save();
@@ -375,7 +453,6 @@ function drawBox(
     ctx.restore();
   }
 
-  // face
   if (style.backgroundColor) {
     ctx.save();
     ctx.globalAlpha = alpha * (style.boxOpacity ?? 1);
@@ -389,7 +466,6 @@ function drawBox(
     ctx.restore();
   }
 
-  // gloss sheen (top half)
   if (style.boxGloss > 0) {
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -402,7 +478,6 @@ function drawBox(
     ctx.restore();
   }
 
-  // border
   if (style.boxStroke) {
     ctx.save();
     ctx.globalAlpha = alpha;

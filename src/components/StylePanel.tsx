@@ -37,10 +37,21 @@ const FONTS = [
 ];
 const ANIMATIONS: AnimationKind[] = [
   "pop",
+  "scale",
+  "zoom",
+  "zoompunch",
   "bounce",
-  "karaoke",
-  "word-by-word",
   "slide-up",
+  "glide",
+  "wave",
+  "shake",
+  "glitch",
+  "whoosh",
+  "blurdissolve",
+  "karaoke",
+  "reveal",
+  "word-by-word",
+  "typewriter",
   "fade",
   "none",
 ];

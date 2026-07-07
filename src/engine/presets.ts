@@ -61,21 +61,46 @@ function cssFamily(font: string, fallbacks?: string[]): string {
   return `${list.join(", ")}, ${generic}`;
 }
 
+// Map the plugin's anim concept names → Pulse engine animations (ported 1:1).
 function mapAnim(anim?: string): AnimationKind {
   switch (anim) {
     case "karaoke":
     case "color-sweep":
     case "box-snap":
-    case "reveal":
       return "karaoke";
+    case "reveal":
+      return "reveal";
+    case "typewriter":
+      return "typewriter";
     case "fade":
       return "fade";
     case "slide":
       return "slide-up";
-    case "typewriter":
-      return "word-by-word";
+    case "glide":
+      return "glide";
+    case "scale":
+      return "scale";
+    case "zoom":
+      return "zoom";
+    case "zoompunch":
+      return "zoompunch";
+    case "bounce":
+      return "bounce";
+    case "wave":
+      return "wave";
+    case "shake":
+      return "shake";
+    case "glitch":
+    case "glitch-in":
+      return "glitch";
+    case "whoosh":
+      return "whoosh";
+    case "blurdissolve":
+      return "blurdissolve";
+    case "none":
+      return "none";
     default:
-      return "pop"; // pop, pop-scale, scale, zoom, shake, wave, glitch, glitch-in
+      return "pop"; // pop, pop-scale
   }
 }
 
