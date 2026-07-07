@@ -21,7 +21,19 @@ const FONTS = [
   ["Poppins, sans-serif", "Poppins"],
   ["Anton, sans-serif", "Anton"],
   ["'Bebas Neue', sans-serif", "Bebas Neue"],
+  ["Oswald, sans-serif", "Oswald"],
+  ["Outfit, sans-serif", "Outfit"],
   ["Inter, sans-serif", "Inter"],
+  ["Nunito, sans-serif", "Nunito"],
+  ["Manrope, sans-serif", "Manrope"],
+  ["'Playfair Display', serif", "Playfair Display"],
+  ["Lora, serif", "Lora"],
+  ["Georgia, serif", "Georgia"],
+  ["'JetBrains Mono', monospace", "JetBrains Mono"],
+  ["'Space Mono', monospace", "Space Mono"],
+  ["Bangers, cursive", "Bangers"],
+  ["'Luckiest Guy', cursive", "Luckiest Guy"],
+  ["Pacifico, cursive", "Pacifico"],
 ];
 const ANIMATIONS: AnimationKind[] = [
   "pop",
@@ -133,8 +145,8 @@ export default function StylePanel({ style, onChange, onPreset }: Props) {
             {/* emphasis */}
             <div>
               <span className="label">Active word</span>
-              <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-edge bg-surface2 p-1">
-                {(["color", "box"] as HighlightMode[]).map((m) => (
+              <div className="mb-3 grid grid-cols-3 gap-1 rounded-lg border border-edge bg-surface2 p-1">
+                {(["color", "box", "bar"] as HighlightMode[]).map((m) => (
                   <button
                     key={m}
                     onClick={() => onChange({ highlightMode: m })}
@@ -144,7 +156,7 @@ export default function StylePanel({ style, onChange, onPreset }: Props) {
                         : "text-muted hover:text-white"
                     }`}
                   >
-                    {m === "box" ? "Box" : "Color"}
+                    {m}
                   </button>
                 ))}
               </div>

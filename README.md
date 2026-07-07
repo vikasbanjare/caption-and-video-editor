@@ -18,7 +18,7 @@ burn-in export, accounts, and billing are later phases.
 | Undo / redo | ✅ full history for every edit (toolbar buttons + Ctrl+Z / Ctrl+Shift+Z), text edits coalesced |
 | Keyboard shortcuts | ✅ Space play/pause · S split at playhead · Delete remove selected · ←/→ nudge (Shift = 1s) |
 | Caption engine (`src/engine`) | ✅ SRT parse/serialize, word timing, regroup, animations (pop/bounce/karaoke/word-by-word/slide/fade), keyword highlight, **Hinglish** romanization, canvas renderer |
-| Templates | ✅ 9 premium presets (Hormozi boxed-keyword, Beasty, Karaoke, Neon glow, Pop Pink, Bebas, TikTok, Clean, Subtitle) rendered live in a visual gallery |
+| Templates | ✅ 97 templates ported 1:1 from the CutPilot Premiere plugin (Hormozi, Karaoke, Neon, Premium/Captions.ai looks, button pills, …) across 12 categories, rendered live in a filterable gallery |
 | Editable transcript | ✅ edit text, split, merge, delete, select, click-to-seek — synced with the timeline |
 | Live preview | ✅ `<canvas>` overlaid on `<video>`, driven by the same `renderFrame` the export worker will use |
 | Export SRT | ✅ · Export burned-in MP4 | ⛔ Phase 3 |

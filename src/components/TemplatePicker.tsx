@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { PRESETS, renderFrame, type Cue, type StylePreset } from "@/engine";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  PRESETS,
+  CATEGORIES,
+  renderFrame,
+  type Cue,
+  type StylePreset,
+} from "@/engine";
 
 interface Props {
   current: string;
   onPick: (id: string) => void;
 }
 
-// A tiny sample cue used to render the thumbnails. The middle word is "current"
-// at the preview time, so active-word effects (box/glow/fill) show up.
+// Sample cue for thumbnails. "IT" is the keyword (emphasised by keyword
+// templates) and is the spoken word at PREVIEW_TIME (emphasised by karaoke).
 const SAMPLE: Cue = {
   id: "thumb",
   start: 0,
@@ -21,30 +27,79 @@ const SAMPLE: Cue = {
     { text: "pop", start: 1.0, end: 1.5 },
   ],
 };
-const PREVIEW_TIME = 0.7;
+const PREVIEW_TIME = 0.72;
 
-/** Visual gallery of caption templates (WEBSAASPLAN.md §4.1 styling). */
 export default function TemplatePicker({ current, onPick }: Props) {
+  const [cat, setCat] = useState<string>("All");
+
+  const shown = useMemo(
+    () =>
+      [...PRESETS]
+        .filter((p) => cat === "All" || p.category === cat)
+        .sort((a, b) => b.popularity - a.popularity),
+    [cat]
+  );
+
   return (
-    <div className="grid grid-cols-2 gap-2.5">
-      {PRESETS.map((p) => (
-        <button
-          key={p.id}
-          onClick={() => onPick(p.id)}
-          className={`group relative overflow-hidden rounded-xl border text-left transition-all ${
-            current === p.id
-              ? "border-accent ring-2 ring-accent/40"
-              : "border-edge hover:border-edge2"
-          }`}
-        >
-          <Thumb preset={p} />
-          <div className="flex items-center justify-between px-2.5 py-1.5">
-            <span className="text-xs font-semibold text-slate-100">{p.label}</span>
-            <span className="text-[10px] text-muted">{p.tag}</span>
-          </div>
-        </button>
-      ))}
+    <div>
+      {/* category filter */}
+      <div className="scroll-thin mb-3 flex gap-1.5 overflow-x-auto pb-1">
+        <Chip active={cat === "All"} onClick={() => setCat("All")}>
+          All <span className="opacity-60">{PRESETS.length}</span>
+        </Chip>
+        {CATEGORIES.map((c) => (
+          <Chip key={c} active={cat === c} onClick={() => setCat(c)}>
+            {c}
+          </Chip>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        {shown.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onPick(p.id)}
+            className={`group relative overflow-hidden rounded-xl border text-left transition-all ${
+              current === p.id
+                ? "border-accent ring-2 ring-accent/40"
+                : "border-edge hover:border-edge2"
+            }`}
+            title={p.label}
+          >
+            <Thumb preset={p} />
+            <div className="flex items-center justify-between px-2.5 py-1.5">
+              <span className="truncate text-xs font-semibold text-slate-100">
+                {p.label}
+              </span>
+              <span className="ml-1 shrink-0 text-[10px] text-muted">{p.tag}</span>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+        active
+          ? "border-accent bg-accent/15 text-accent2"
+          : "border-edge bg-surface2 text-muted hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -62,13 +117,11 @@ function Thumb({ preset }: { preset: StylePreset }) {
     const H = (canvas.height = Math.round(96 * dpr));
 
     const draw = () => {
-      // backdrop
       const g = ctx.createLinearGradient(0, 0, W, H);
       g.addColorStop(0, "#2b2350");
       g.addColorStop(1, "#16203a");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
-      // caption — force center + larger size so it reads in the thumbnail
       renderFrame({
         ctx,
         cue: SAMPLE,
@@ -76,8 +129,8 @@ function Thumb({ preset }: { preset: StylePreset }) {
           ...preset.style,
           position: "center",
           marginV: 0,
-          fontScale: 0.2,
-          maxWidth: 0.92,
+          fontScale: preset.style.maxLines === 1 ? 0.16 : 0.2,
+          maxWidth: 0.94,
         },
         time: PREVIEW_TIME,
         width: W,
@@ -86,17 +139,10 @@ function Thumb({ preset }: { preset: StylePreset }) {
     };
 
     draw();
-    // Display fonts may still be loading — redraw when they're ready.
     const fonts = (document as unknown as { fonts?: { ready: Promise<unknown> } })
       .fonts;
     fonts?.ready.then(draw).catch(() => {});
   }, [preset]);
 
-  return (
-    <canvas
-      ref={ref}
-      className="block h-[96px] w-full"
-      style={{ imageRendering: "auto" }}
-    />
-  );
+  return <canvas ref={ref} className="block h-[96px] w-full" />;
 }

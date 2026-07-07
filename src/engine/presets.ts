@@ -1,180 +1,194 @@
-import type { CaptionStyle } from "./types";
+import type {
+  CaptionStyle,
+  AnimationKind,
+  CaptionPosition,
+  HighlightMode,
+} from "./types";
+import { RAW_TEMPLATES, CATEGORY_ORDER, type RawTemplate } from "./templates.data";
 
 /**
- * Premium caption template catalog — the styles short-form creators actually
- * use (Hormozi-style boxed keywords, karaoke fills, neon, etc.). Each is a
- * complete {@link CaptionStyle}; the UI shows them as a visual gallery and lets
- * the user tweak any field afterwards.
+ * The caption template catalog — every preset from the CutPilot Premiere plugin
+ * (vikasbanjare/video · captions.js), mapped into the web engine's
+ * {@link CaptionStyle}. 97 templates across the plugin's library categories,
+ * shown as a visual gallery the user can pick from and then tweak.
  */
 
 export interface StylePreset {
   id: string;
   label: string;
-  /** one-word vibe shown under the thumbnail */
+  category: string;
   tag: string;
+  popularity: number;
   style: CaptionStyle;
 }
 
-const base: CaptionStyle = {
-  preset: "hormozi",
-  fontFamily: "Montserrat, sans-serif",
-  fontWeight: 900,
-  fontScale: 0.072,
-  color: "#ffffff",
-  highlightColor: "#ffd400",
-  activeWordColor: "#ffd400",
-  strokeColor: "#000000",
-  strokeWidth: 0.14,
-  backgroundColor: "",
-  uppercase: true,
-  animation: "pop",
-  position: "bottom",
-  marginV: 0.2,
-  maxWidth: 0.84,
-  wordsPerCue: 4,
-  lineHeight: 1.12,
-  shadowBlur: 0.22,
-  shadowColor: "rgba(0,0,0,0.5)",
-  letterSpacing: 0,
-  highlightMode: "color",
-  activeBoxColor: "#ffd400",
-  activeBoxTextColor: "#000000",
-  glow: 0,
-  glowColor: "#7c5cff",
-  cornerRadius: 0.24,
-};
+const REF_H = 1080; // plugin font sizes are px on a ~1080-tall frame
 
-function preset(
-  id: string,
-  label: string,
-  tag: string,
-  overrides: Partial<CaptionStyle>
-): StylePreset {
-  return { id, label, tag, style: { ...base, preset: id, ...overrides } };
+// ---- colour helpers --------------------------------------------------------
+function hexRgb(hex: string): [number, number, number] {
+  let h = (hex || "").replace("#", "").trim();
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const n = parseInt(h || "000000", 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function luminance(hex: string): number {
+  const [r, g, b] = hexRgb(hex);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+function autoContrast(hex: string): string {
+  return luminance(hex) > 0.55 ? "#111111" : "#FFFFFF";
+}
+function rgba(hex: string, a: number): string {
+  const [r, g, b] = hexRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
-export const PRESETS: StylePreset[] = [
-  preset("hormozi", "Hormozi", "boxed keyword", {
-    fontFamily: "Montserrat, sans-serif",
-    highlightMode: "box",
-    activeBoxColor: "#ffd400",
-    activeBoxTextColor: "#000000",
-    animation: "pop",
-    wordsPerCue: 4,
-  }),
-  preset("beasty", "Beasty", "loud", {
-    fontFamily: "'Archivo Black', sans-serif",
-    fontWeight: 900,
-    fontScale: 0.082,
-    color: "#ffffff",
-    highlightMode: "color",
-    activeWordColor: "#22e06b",
-    highlightColor: "#22e06b",
-    strokeWidth: 0.16,
-    animation: "bounce",
-    wordsPerCue: 3,
-  }),
-  preset("karaoke", "Karaoke", "fill sync", {
-    fontFamily: "Poppins, sans-serif",
-    fontWeight: 800,
-    uppercase: false,
-    color: "#ffffff",
-    activeWordColor: "#4f8bff",
-    highlightMode: "color",
-    animation: "karaoke",
-    strokeColor: "#000000",
-    strokeWidth: 0.1,
-    wordsPerCue: 5,
-  }),
-  preset("neon", "Neon", "glow", {
-    fontFamily: "Anton, sans-serif",
-    fontWeight: 400,
-    fontScale: 0.085,
-    color: "#ffffff",
-    highlightMode: "color",
-    activeWordColor: "#37f0ff",
-    highlightColor: "#37f0ff",
-    strokeColor: "",
-    strokeWidth: 0,
-    shadowBlur: 0,
-    glow: 0.8,
-    glowColor: "#19b6ff",
-    animation: "pop",
-    wordsPerCue: 3,
-  }),
-  preset("poppink", "Pop Pink", "boxed", {
-    fontFamily: "Poppins, sans-serif",
-    fontWeight: 900,
-    highlightMode: "box",
-    activeBoxColor: "#ff3d7f",
-    activeBoxTextColor: "#ffffff",
-    animation: "pop",
-    wordsPerCue: 4,
-  }),
-  preset("bebas", "Bebas", "tall caps", {
-    fontFamily: "'Bebas Neue', sans-serif",
-    fontWeight: 400,
-    fontScale: 0.1,
-    letterSpacing: 0.02,
-    highlightMode: "box",
-    activeBoxColor: "#ff4d4d",
-    activeBoxTextColor: "#ffffff",
-    strokeColor: "",
-    strokeWidth: 0,
-    animation: "slide-up",
-    wordsPerCue: 4,
-  }),
-  preset("tiktok", "TikTok", "word-by-word", {
-    fontFamily: "Poppins, sans-serif",
-    fontWeight: 800,
-    uppercase: false,
-    color: "#ffffff",
-    backgroundColor: "rgba(0,0,0,0.42)",
-    strokeColor: "",
-    strokeWidth: 0,
-    shadowBlur: 0,
-    highlightMode: "color",
-    activeWordColor: "#ffd400",
-    animation: "word-by-word",
-    marginV: 0.12,
-    wordsPerCue: 5,
-    cornerRadius: 0.3,
-  }),
-  preset("clean", "Clean", "minimal", {
-    fontFamily: "Inter, sans-serif",
-    fontWeight: 700,
-    fontScale: 0.05,
-    uppercase: false,
-    color: "#ffffff",
-    highlightMode: "color",
-    activeWordColor: "#ffffff",
-    strokeColor: "",
-    strokeWidth: 0,
-    shadowBlur: 0.16,
-    animation: "fade",
-    marginV: 0.1,
-    wordsPerCue: 7,
-  }),
-  preset("subtitle", "Subtitle", "classic", {
-    fontFamily: "Inter, sans-serif",
-    fontWeight: 600,
-    fontScale: 0.045,
-    uppercase: false,
-    color: "#ffffff",
-    backgroundColor: "rgba(0,0,0,0.62)",
-    strokeColor: "",
-    strokeWidth: 0,
-    shadowBlur: 0,
-    highlightMode: "color",
-    activeWordColor: "#ffffff",
-    animation: "none",
-    marginV: 0.08,
-    wordsPerCue: 9,
-    cornerRadius: 0.18,
-  }),
-];
+// ---- fonts -----------------------------------------------------------------
+const SERIF = new Set(["Georgia", "Playfair Display", "Lora", "Merriweather", "Times New Roman"]);
+const MONO = new Set(["JetBrains Mono", "Space Mono", "Roboto Mono", "Courier New"]);
+const CURSIVE = new Set(["Pacifico", "Caveat", "Bradley Hand", "Comic Sans MS"]);
+const q = (f: string) => (/\s/.test(f) ? `'${f}'` : f);
 
-export const DEFAULT_PRESET = PRESETS[0]; // Hormozi
+function cssFamily(font: string, fallbacks?: string[]): string {
+  const generic = SERIF.has(font)
+    ? "serif"
+    : MONO.has(font)
+      ? "monospace"
+      : CURSIVE.has(font)
+        ? "cursive"
+        : "sans-serif";
+  const list = [font, ...(fallbacks || [])].map(q);
+  return `${list.join(", ")}, ${generic}`;
+}
+
+function mapAnim(anim?: string): AnimationKind {
+  switch (anim) {
+    case "karaoke":
+    case "color-sweep":
+    case "box-snap":
+    case "reveal":
+      return "karaoke";
+    case "fade":
+      return "fade";
+    case "slide":
+      return "slide-up";
+    case "typewriter":
+      return "word-by-word";
+    default:
+      return "pop"; // pop, pop-scale, scale, zoom, shake, wave, glitch, glitch-in
+  }
+}
+
+// ---- raw → CaptionStyle ----------------------------------------------------
+function toStyle(t: RawTemplate): CaptionStyle {
+  const fs = t.fontSize || 60;
+  const fontScale = Math.min(0.13, Math.max(0.03, fs / REF_H));
+  const hl = t.highlight || t.fill || "#FFFFFF";
+  const hlMode: HighlightMode =
+    t.highlightStyle === "box" ? "box" : t.highlightStyle === "bar" ? "bar" : "color";
+
+  // glow: a bright colour = neon; a dark colour = soft shadow; none = readability shadow
+  let glow = 0;
+  let glowColor = "#000000";
+  let shadowBlur = 0;
+  let shadowColor = "rgba(0,0,0,0.55)";
+  if (t.glow) {
+    if (luminance(t.glow) >= 0.12) {
+      glow = Math.min(1, Math.max(0.45, t.glowBlur ?? 0.7));
+      glowColor = t.glow;
+    } else {
+      shadowBlur = Math.min(0.5, Math.max(0.2, t.glowBlur ?? 0.4));
+      shadowColor = rgba(t.glow, 0.62);
+    }
+  } else if (!t.boxColor && !(t.stroke && (t.strokeWidth || 0) > 0)) {
+    shadowBlur = 0.16;
+  }
+
+  const boxRadiusPx = t.boxRadius ?? (hlMode === "box" ? fs * 0.22 : fs * 0.2);
+  const cornerRadius = Math.min(0.5, Math.max(0.06, boxRadiusPx / (fs * 0.9)));
+
+  const wpc = t.wordsPerCue === 0 ? 6 : (t.wordsPerCue ?? 4);
+  const layout = (t.layout || "bottom") as CaptionPosition;
+
+  return {
+    preset: t.id,
+
+    fontFamily: cssFamily(t.font, t.fallbackFonts),
+    fontWeight: t.weight ?? 800,
+    fontScale,
+    uppercase: !!t.uppercase,
+    letterSpacing: (t.letterSpacing ?? 0) / fs,
+    lineHeight: 1.12,
+    wordsPerCue: wpc,
+    maxLines: t.maxLines ?? 0,
+
+    color: t.fill || "#FFFFFF",
+    color2: t.fill2 || "",
+    gloss: !!t.glossy,
+    strokeColor: t.stroke || "",
+    strokeWidth: t.stroke ? (t.strokeWidth ?? 0) / fs : 0,
+    shadowBlur,
+    shadowColor,
+    glow,
+    glowColor,
+
+    emphasis: t.keyword ? "keyword" : "spoken",
+    highlightMode: hlMode,
+    activeWordColor: hl,
+    activeWordColor2: t.highlight2 || "",
+    highlightColor: hl,
+    activeBoxColor: hl,
+    activeBoxTextColor: autoContrast(hl),
+    activeScale: t.highlightScale ?? 1,
+    upcomingOpacity: t.upcomingOpacity ?? 1,
+    keywordFontFamily: t.highlightFont ? cssFamily(t.highlightFont) : "",
+    keywordItalic: !!t.highlightItalic,
+
+    animation: mapAnim(t.anim),
+    position: layout,
+    marginV: layout === "top" ? 0.1 : 0.14,
+    maxWidth: t.maxLines === 1 ? 0.9 : 0.86,
+    cornerRadius,
+
+    backgroundColor: t.boxColor || "",
+    boxColor2: t.boxColor2 || "",
+    boxGradient: t.boxGradient || "",
+    boxStops: t.boxStops || null,
+    boxOpacity: t.boxOpacity ?? 1,
+    boxPad: t.boxPad ?? 1,
+    boxStroke: t.boxStroke || "",
+    boxStrokeWidth: t.boxStroke ? (t.boxStrokeWidth ?? 0.05 * fs) / fs : 0,
+    boxGlow: t.boxGlow || "",
+    boxGlowBlur: t.boxGlowBlur ?? 0.4,
+    box3d: t.box3d || "",
+    box3dDepth: t.box3d ? (t.box3dDepth ?? 0.12 * fs) / fs : 0,
+    boxGloss: t.boxGloss ?? 0,
+    boxShadow: t.boxShadow || "",
+    boxShadowBlur: t.boxShadowBlur ?? 0.4,
+    boxShadowDY: (t.boxShadowDY ?? 0.1 * fs) / fs,
+  };
+}
+
+function shortTag(category: string): string {
+  return category.replace(/[⭐🔘]\s*/u, "");
+}
+
+export const PRESETS: StylePreset[] = RAW_TEMPLATES.map((t) => ({
+  id: t.id,
+  label: t.name,
+  category: t.category,
+  tag: shortTag(t.category),
+  popularity: t.popularity ?? 60,
+  style: toStyle(t),
+}));
+
+/** Categories that actually have templates, in the plugin's library order. */
+export const CATEGORIES: string[] = CATEGORY_ORDER.filter((c) =>
+  PRESETS.some((p) => p.category === c)
+);
+
+export const DEFAULT_PRESET =
+  PRESETS.find((p) => p.id === "pro-spotlight") ?? PRESETS[0];
 
 export function presetById(id: string): StylePreset {
   return PRESETS.find((p) => p.id === id) ?? DEFAULT_PRESET;

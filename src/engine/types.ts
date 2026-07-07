@@ -1,35 +1,28 @@
 /**
  * Shared cue / style schema — the single source of truth used by the browser
- * preview AND (later) the server render worker. Keeping this framework-agnostic
- * is what lets "preview === export" (see WEBSAASPLAN.md §1, §6 Phase 0).
+ * preview AND (later) the server render worker ("preview === export").
  */
 
-/** One word with its own timing — the basis for karaoke / word-by-word sync. */
 export interface Word {
   text: string;
   /** seconds */
   start: number;
   /** seconds */
   end: number;
-  /** highlighted (keyword) word — drawn in the highlight color */
+  /** the auto-detected keyword of its cue (emphasised by keyword templates) */
   highlight?: boolean;
 }
 
-/** A caption cue: a short run of words shown together on screen. */
 export interface Cue {
   id: string;
-  /** seconds */
   start: number;
-  /** seconds */
   end: number;
   text: string;
   words: Word[];
 }
 
-/** A full transcript is just an ordered list of cues. */
 export interface Transcript {
   cues: Cue[];
-  /** BCP-47-ish language tag, e.g. "en", "hi". */
   language?: string;
 }
 
@@ -44,60 +37,85 @@ export type AnimationKind =
 
 export type CaptionPosition = "top" | "center" | "bottom";
 
-/** How the "active"/highlighted word is emphasised. */
-export type HighlightMode = "color" | "box";
+/** How the emphasised word is drawn. */
+export type HighlightMode = "color" | "box" | "bar";
+
+/** Which word gets emphasised: the currently-spoken one, or the cue's keyword. */
+export type EmphasisMode = "spoken" | "keyword";
 
 /**
- * Style for a project's captions. All sizes that must look identical between
- * the browser preview and a server render are expressed as *fractions of the
- * canvas* (resolution independent) rather than absolute pixels.
+ * Full caption style. Sizes that must match between browser preview and server
+ * render are fractions of the canvas (resolution-independent). Superset of the
+ * CutPilot Premiere plugin's preset schema so every ported template renders.
  */
 export interface CaptionStyle {
-  /** id of the preset this style was derived from (for the UI) */
   preset: string;
+
+  // --- type ---
   fontFamily: string;
   fontWeight: number;
-  /** font size as a fraction of canvas height (e.g. 0.06 = 6% of height) */
-  fontScale: number;
-  /** base text color */
-  color: string;
-  /** color for keyword-highlighted words */
-  highlightColor: string;
-  /** color for the currently-spoken word (karaoke / word-by-word) */
-  activeWordColor: string;
-  /** outline color; "" disables the outline */
-  strokeColor: string;
-  /** outline width as a fraction of the font pixel size */
-  strokeWidth: number;
-  /** background pill color (rgba/hex); "" disables the box */
-  backgroundColor: string;
+  fontScale: number; // fraction of canvas height
   uppercase: boolean;
-  animation: AnimationKind;
-  position: CaptionPosition;
-  /** vertical margin from the chosen edge, as a fraction of height */
-  marginV: number;
-  /** max text width as a fraction of canvas width (for wrapping) */
-  maxWidth: number;
-  /** how many words to group into one cue when regrouping */
-  wordsPerCue: number;
-  /** line height multiplier */
+  letterSpacing: number; // em
   lineHeight: number;
-  /** drop-shadow blur as a fraction of the font pixel size */
-  shadowBlur: number;
+  wordsPerCue: number;
+  /** 0 = wrap freely; 1 = force one line and shrink to fit (button pills) */
+  maxLines: number;
+
+  // --- fill ---
+  color: string;
+  /** vertical gradient bottom colour for the text ("" = solid) */
+  color2: string;
+  /** subtle top sheen on the text */
+  gloss: boolean;
+  strokeColor: string; // "" disables
+  strokeWidth: number; // fraction of font px
+  shadowBlur: number; // fraction of font px
   shadowColor: string;
-  /** letter spacing in em */
-  letterSpacing: number;
+  glow: number; // 0..1 neon glow
+  glowColor: string;
 
   // --- emphasis ---
-  /** how the active/highlighted word is shown: recolor it, or sit it in a box */
+  emphasis: EmphasisMode;
   highlightMode: HighlightMode;
-  /** rounded-box color drawn behind the active word (when highlightMode==="box") */
+  /** colour for the emphasised word (color/bar modes) */
+  activeWordColor: string;
+  /** optional gradient partner for the emphasised word ("" = solid) */
+  activeWordColor2: string;
+  /** colour for keyword-highlighted words when not the active one */
+  highlightColor: string;
+  /** filled pill behind the emphasised word (box mode) */
   activeBoxColor: string;
-  /** text color used on top of the active box */
   activeBoxTextColor: string;
-  /** neon glow strength, 0–1 (0 = off) */
-  glow: number;
-  glowColor: string;
-  /** corner radius for pills/boxes, as a fraction of the font pixel size */
-  cornerRadius: number;
+  /** scale applied to the emphasised word */
+  activeScale: number;
+  /** opacity of not-yet-spoken words (reveal effect); 1 = off */
+  upcomingOpacity: number;
+  /** optional different font for the keyword ("" = same) */
+  keywordFontFamily: string;
+  keywordItalic: boolean;
+
+  animation: AnimationKind;
+  position: CaptionPosition;
+  marginV: number; // fraction of height
+  maxWidth: number; // fraction of width
+  cornerRadius: number; // fraction of font px (pills/boxes)
+
+  // --- line background box / button pill ---
+  backgroundColor: string; // "" = none
+  boxColor2: string; // gradient partner
+  boxGradient: "" | "v" | "h";
+  boxStops: Array<[number, string]> | null;
+  boxOpacity: number;
+  boxPad: number; // padding multiplier
+  boxStroke: string;
+  boxStrokeWidth: number; // fraction of font px
+  boxGlow: string;
+  boxGlowBlur: number; // fraction of font px
+  box3d: string;
+  box3dDepth: number; // fraction of font px
+  boxGloss: number; // 0..1 sheen on the box
+  boxShadow: string;
+  boxShadowBlur: number; // fraction of font px
+  boxShadowDY: number; // fraction of font px
 }
