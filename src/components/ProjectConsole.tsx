@@ -4,11 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import {
   renderFrame,
   styleFromPreset,
+  PRESETS,
   type Cue,
   type CaptionStyle,
 } from "@/engine";
 import { timeAgo, type ProjectRecord } from "@/lib/store";
 import { fmtClock } from "@/lib/transcript";
+
+// template names for the marquee (real, from the catalog) + the room tour
+const MARQUEE: string[] = PRESETS.slice(0, 28).map((p) => p.label);
+const ROOMS: [string, string, string][] = [
+  ["01", "Ingest", "Drop a clip — nothing uploads"],
+  ["02", "Script", "Whisper transcribes, you fix words"],
+  ["03", "Cut", "Trim on a real timeline"],
+  ["04", "Color", "Grade the picture with looks"],
+  ["05", "Type", "97 templates, full control"],
+  ["06", "Export", "Burn captions into an MP4"],
+];
 
 interface Props {
   projects: ProjectRecord[];
@@ -64,24 +76,25 @@ export default function ProjectConsole({
       />
 
       <div className="mx-auto flex min-h-full max-w-6xl flex-col px-6 sm:px-10">
-        {/* console head: control column + live program monitor */}
-        <section className="grid flex-1 items-center gap-10 py-8 md:grid-cols-[1fr_300px] md:py-10 lg:gap-16">
+        {/* console head: masthead + live program monitor */}
+        <section className="grid items-center gap-10 py-10 md:grid-cols-[1.05fr_340px] md:py-14 lg:gap-16">
           <div className="order-2 md:order-1">
-            <span className="chip chip-active">
-              <SparkIcon /> Caption NLE · 100% on-device
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent">
+              <SparkIcon /> 100% on-device · nothing uploads
             </span>
-            <h1 className="mt-4 text-[clamp(1.9rem,3.4vw,2.9rem)] font-extrabold leading-[1.04] tracking-tight text-ink">
-              Caption anything.{" "}
-              <span className="grad-text">Nothing leaves your browser.</span>
+            <h1 className="mt-5 text-[clamp(2.5rem,5.6vw,4.6rem)] font-extrabold leading-[0.97] tracking-[-0.02em] text-ink">
+              Caption anything.
+              <br />
+              <span className="text-accent">Zero uploads.</span>
             </h1>
-            <p className="mt-4 max-w-md text-[15px] leading-relaxed text-muted">
-              Whisper transcribes on your own machine. 97 studio caption
-              templates, a real editing timeline and word-perfect timing — then
-              export. No uploads, no accounts, no watermark.
+            <p className="mt-5 max-w-md text-[15px] leading-relaxed text-muted">
+              Whisper runs on your machine. 97 studio caption templates, a real
+              editing timeline, color grading and burned-in export — all in the
+              browser. No accounts, no watermark.
             </p>
 
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button className="btn btn-primary" onClick={pick}>
+            <div className="mt-7 flex flex-wrap items-center gap-4">
+              <button className="btn btn-primary text-[15px]" onClick={pick}>
                 <PlusIcon /> New from media
               </button>
               <span className="font-mono text-[11px] text-muted">
@@ -89,30 +102,69 @@ export default function ProjectConsole({
               </span>
             </div>
 
-            <dl className="mt-8 flex flex-wrap gap-x-8 gap-y-3 border-t border-edge pt-5">
-              {[
-                ["97", "templates"],
-                ["17", "animations"],
-                ["40+", "languages"],
-                ["∞", "private"],
-              ].map(([n, l]) => (
-                <div key={l} className="flex items-baseline gap-1.5">
-                  <dt className="font-mono text-lg font-semibold tabular-nums text-ink">
-                    {n}
-                  </dt>
-                  <dd className="eyebrow">{l}</dd>
-                </div>
-              ))}
-            </dl>
+            <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge pt-4 font-mono text-[11px] uppercase tracking-label text-muted">
+              <span>
+                <b className="font-semibold text-ink">97</b> templates
+              </span>
+              <span className="text-edge2">·</span>
+              <span>
+                <b className="font-semibold text-ink">17</b> animations
+              </span>
+              <span className="text-edge2">·</span>
+              <span>
+                <b className="font-semibold text-ink">40+</b> languages
+              </span>
+              <span className="text-edge2">·</span>
+              <span>
+                <b className="font-semibold text-ink">0</b> uploads
+              </span>
+            </div>
           </div>
 
-          <div className="relative order-1 mx-auto w-full max-w-[300px] md:order-2">
-            {/* soft blue-violet aura behind the monitor */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-8 -z-10 rounded-[40px] bg-grad-accent opacity-20 blur-3xl"
-            />
+          <div className="order-1 mx-auto w-full max-w-[340px] md:order-2">
             <ProgramMonitor />
+          </div>
+        </section>
+
+        {/* template marquee — motion + proof, in-voice */}
+        <section className="flex items-center gap-5 overflow-hidden border-t border-edge py-3">
+          <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-label text-muted sm:block">
+            97 studio templates
+          </span>
+          <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]">
+            <div className="flex w-max animate-marquee gap-2.5 whitespace-nowrap">
+              {[...MARQUEE, ...MARQUEE].map((n, i) => (
+                <span
+                  key={i}
+                  className="rounded-full border border-edge bg-surface2 px-3 py-1 font-mono text-[11px] text-muted"
+                >
+                  {n}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* bento — one project, six rooms */}
+        <section className="border-t border-edge py-8">
+          <span className="eyebrow">One project · six rooms</span>
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+            {ROOMS.map(([n, t, d]) => (
+              <div
+                key={n}
+                className="rounded-xl border border-edge bg-surface p-4 transition-colors hover:border-edge2"
+              >
+                <div className="font-mono text-[11px] tabular-nums text-accent">
+                  {n}
+                </div>
+                <div className="mt-1.5 text-[15px] font-semibold text-ink">
+                  {t}
+                </div>
+                <div className="mt-0.5 text-[12px] leading-snug text-muted">
+                  {d}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -141,7 +193,7 @@ export default function ProjectConsole({
                   : "border-edge2 hover:border-accent hover:bg-surface"
               }`}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-grad-accent text-white shadow-glow-sm transition-transform group-hover:-translate-y-0.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white transition-transform group-hover:-translate-y-0.5">
                 <UploadIcon />
               </span>
               <span className="font-mono text-[10px] uppercase tracking-label text-muted">
@@ -297,7 +349,7 @@ function ProgramMonitor() {
   }, []);
 
   return (
-    <figure className="relative overflow-hidden rounded-3xl border border-edge2 bg-black shadow-glow-sm">
+    <figure className="relative overflow-hidden rounded-3xl border border-edge2 bg-black shadow-[0_40px_90px_-40px_rgb(var(--shadow)/0.7)]">
       <canvas ref={ref} className="block aspect-[9/16] w-full" />
 
       {/* functional chrome — reads like a program monitor, not a poster */}
