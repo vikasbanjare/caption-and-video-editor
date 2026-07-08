@@ -5,6 +5,7 @@ import type {
   HighlightMode,
 } from "./types";
 import { RAW_TEMPLATES, CATEGORY_ORDER, type RawTemplate } from "./templates.data";
+import { FLUX_TEMPLATES, FLUX_CATEGORY_ORDER } from "./flux.data";
 
 /**
  * The caption template catalog — every preset from the CutPilot Premiere plugin
@@ -235,7 +236,10 @@ function shortTag(category: string): string {
   return category.replace(/[⭐🔘]\s*/u, "");
 }
 
-export const PRESETS: StylePreset[] = RAW_TEMPLATES.map((t) => ({
+// Flux + Titles (the plugin's MOGRT sections) lead, then the 97-caption library.
+const ALL_RAW: RawTemplate[] = [...FLUX_TEMPLATES, ...RAW_TEMPLATES];
+
+export const PRESETS: StylePreset[] = ALL_RAW.map((t) => ({
   id: t.id,
   label: t.name,
   category: t.category,
@@ -245,9 +249,10 @@ export const PRESETS: StylePreset[] = RAW_TEMPLATES.map((t) => ({
 }));
 
 /** Categories that actually have templates, in the plugin's library order. */
-export const CATEGORIES: string[] = CATEGORY_ORDER.filter((c) =>
-  PRESETS.some((p) => p.category === c)
-);
+export const CATEGORIES: string[] = [
+  ...FLUX_CATEGORY_ORDER,
+  ...CATEGORY_ORDER,
+].filter((c) => PRESETS.some((p) => p.category === c));
 
 export const DEFAULT_PRESET =
   PRESETS.find((p) => p.id === "pro-spotlight") ?? PRESETS[0];
