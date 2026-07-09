@@ -50,6 +50,7 @@ import {
 import { buildStubSrt } from "@/server/transcription/stub";
 import { exportBurnIn, downloadBlob, isExportSupported } from "@/lib/export";
 import { buildAss } from "@/lib/ass";
+import { buildOtio, buildMarkerCsv } from "@/lib/interchange";
 import {
   DEFAULT_GRADE,
   gradeFilter,
@@ -495,6 +496,40 @@ export default function Editor() {
     URL.revokeObjectURL(url);
     setStatus("Exported styled .ass — import into DaVinci Resolve or any libass player.");
   }, [title]);
+
+  const downloadText = useCallback(
+    (text: string, ext: string, mime = "text/plain") => {
+      const blob = new Blob([text], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(title || "pulse").replace(/[^\w-]+/g, "_")}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [title]
+  );
+
+  const handleExportOtio = useCallback(() => {
+    const chaps = chapters.length ? chapters : generateChapters(cuesRef.current);
+    downloadText(
+      buildOtio({
+        name: title || "Pulse Timeline",
+        mediaName: videoFileRef.current?.name || "clip.mp4",
+        durationSec: transcriptDuration(cuesRef.current) || duration || 0,
+        chapters: chaps,
+      }),
+      "otio",
+      "application/json"
+    );
+    setStatus("Exported .otio timeline — import into DaVinci Resolve or Premiere Pro.");
+  }, [chapters, title, duration, downloadText]);
+
+  const handleExportMarkers = useCallback(() => {
+    const chaps = chapters.length ? chapters : generateChapters(cuesRef.current);
+    downloadText(buildMarkerCsv(chaps), "csv", "text/csv");
+    setStatus(`Exported ${chaps.length} chapter markers (.csv) for Resolve / Premiere.`);
+  }, [chapters, downloadText]);
 
   const handleExportVideo = useCallback(async () => {
     if (!videoUrl || exportPct !== null) return;
@@ -1024,11 +1059,37 @@ export default function Editor() {
                     .ass (styled)
                   </button>
                 </div>
+
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-label text-muted">
+                    Into your editor
+                  </span>
+                  <span className="h-px flex-1 bg-edge" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    className="btn w-full justify-center"
+                    onClick={handleExportOtio}
+                    disabled={!cues.length || exportPct !== null}
+                    title="OpenTimelineIO — DaVinci Resolve 18.5+ and Premiere Pro 2025+ import natively"
+                  >
+                    .otio timeline
+                  </button>
+                  <button
+                    className="btn w-full justify-center"
+                    onClick={handleExportMarkers}
+                    disabled={!cues.length || exportPct !== null}
+                    title="Chapter markers CSV for DaVinci Resolve / Premiere"
+                  >
+                    markers .csv
+                  </button>
+                </div>
               </div>
               <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
-                Burn-in renders in your browser in real time — the same engine
-                as the preview, so what you see is what you get. Saves as MP4
-                where supported, otherwise WebM.
+                Burn-in renders in your browser in real time (MP4 where
+                supported, else WebM). Or hand off to an NLE: styled captions
+                (.ass), the timeline (.otio) and chapter markers (.csv) drop
+                straight into DaVinci Resolve / Premiere Pro.
               </p>
             </div>
           </div>
