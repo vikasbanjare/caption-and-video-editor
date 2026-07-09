@@ -49,6 +49,7 @@ import {
 } from "@/lib/store";
 import { buildStubSrt } from "@/server/transcription/stub";
 import { exportBurnIn, downloadBlob, isExportSupported } from "@/lib/export";
+import { buildAss } from "@/lib/ass";
 import {
   DEFAULT_GRADE,
   gradeFilter,
@@ -59,6 +60,7 @@ import {
 import VideoStage from "./VideoStage";
 import TranscriptPanel from "./TranscriptPanel";
 import NotesPanel from "./NotesPanel";
+import AnalyticsPanel from "./AnalyticsPanel";
 import StylePanel from "./StylePanel";
 import Timeline from "./Timeline";
 import ProjectConsole from "./ProjectConsole";
@@ -120,7 +122,7 @@ export default function Editor() {
   // ---- notes -----------------------------------------------------------------
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [noteMode, setNoteMode] = useState(false);
-  const [leftTab, setLeftTab] = useState<"transcript" | "notes">("transcript");
+  const [leftTab, setLeftTab] = useState<"transcript" | "notes" | "insights">("transcript");
 
   // ---- video export (burn-in) ------------------------------------------------
   const [exportPct, setExportPct] = useState<number | null>(null);
@@ -476,6 +478,22 @@ export default function Editor() {
     a.download = `${(title || "captions").replace(/[^\w-]+/g, "_")}.srt`;
     a.click();
     URL.revokeObjectURL(url);
+  }, [title]);
+
+  const handleExportAss = useCallback(() => {
+    const v = videoElRef.current;
+    const ass = buildAss(cuesRef.current, styleRef.current, {
+      width: v?.videoWidth || 1080,
+      height: v?.videoHeight || 1920,
+    });
+    const blob = new Blob([ass], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(title || "captions").replace(/[^\w-]+/g, "_")}.ass`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("Exported styled .ass — import into DaVinci Resolve or any libass player.");
   }, [title]);
 
   const handleExportVideo = useCallback(async () => {
@@ -850,12 +868,17 @@ export default function Editor() {
                 <PanelTab active={leftTab === "notes"} onClick={() => setLeftTab("notes")}>
                   Notes {openNoteCount > 0 && <Count n={openNoteCount} accent />}
                 </PanelTab>
+                <PanelTab active={leftTab === "insights"} onClick={() => setLeftTab("insights")}>
+                  Insights
+                </PanelTab>
               </StageHead>
               <div className="min-h-0 flex-1">
                 {leftTab === "transcript" ? (
                   <TranscriptPanel cues={cues} activeId={activeId} selectedId={selectedId} onSelect={setSelectedId} onSeek={onSeek} onEditText={onEditText} onSplit={onSplit} onMerge={onMerge} onDelete={onDelete} />
-                ) : (
+                ) : leftTab === "notes" ? (
                   <NotesPanel notes={notes} noteMode={noteMode} onToggleMode={() => setNoteMode((m) => !m)} onSeek={onSeek} onEdit={editNote} onToggleResolved={toggleNoteResolved} onDelete={deleteNote} onAddAtPlayhead={onAddNoteAtPlayhead} />
+                ) : (
+                  <AnalyticsPanel cues={cues} duration={effectiveDuration} peaks={peaks} />
                 )}
               </div>
             </main>
@@ -984,13 +1007,23 @@ export default function Editor() {
                     />
                   </div>
                 )}
-                <button
-                  className="btn w-full justify-center"
-                  onClick={handleExportSrt}
-                  disabled={!cues.length || exportPct !== null}
-                >
-                  Export .srt (captions only)
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    className="btn w-full justify-center"
+                    onClick={handleExportSrt}
+                    disabled={!cues.length || exportPct !== null}
+                  >
+                    .srt
+                  </button>
+                  <button
+                    className="btn w-full justify-center"
+                    onClick={handleExportAss}
+                    disabled={!cues.length || exportPct !== null}
+                    title="Styled + word-karaoke captions for DaVinci Resolve / libass players"
+                  >
+                    .ass (styled)
+                  </button>
+                </div>
               </div>
               <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
                 Burn-in renders in your browser in real time — the same engine
