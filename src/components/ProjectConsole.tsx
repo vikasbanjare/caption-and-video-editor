@@ -18,7 +18,7 @@ const ROOMS: [string, string, string][] = [
   ["02", "Script", "Whisper transcribes, you fix words"],
   ["03", "Cut", "Trim on a real timeline"],
   ["04", "Color", "Grade the picture with looks"],
-  ["05", "Type", "97 templates, full control"],
+  ["05", "Type", "111 templates, full control"],
   ["06", "Export", "Burn captions into an MP4"],
 ];
 
@@ -88,7 +88,7 @@ export default function ProjectConsole({
               <span className="text-accent">Zero uploads.</span>
             </h1>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-muted">
-              Whisper runs on your machine. 97 studio caption templates, a real
+              Whisper runs on your machine. 111 caption & title templates, a real
               editing timeline, color grading and burned-in export — all in the
               browser. No accounts, no watermark.
             </p>
@@ -104,7 +104,7 @@ export default function ProjectConsole({
 
             <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge pt-4 font-mono text-[11px] uppercase tracking-label text-muted">
               <span>
-                <b className="font-semibold text-ink">97</b> templates
+                <b className="font-semibold text-ink">111</b> templates
               </span>
               <span className="text-edge2">·</span>
               <span>
@@ -129,7 +129,7 @@ export default function ProjectConsole({
         {/* template marquee — motion + proof, in-voice */}
         <section className="flex items-center gap-5 overflow-hidden border-t border-edge py-3">
           <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-label text-muted sm:block">
-            97 studio templates
+            111 studio templates
           </span>
           <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]">
             <div className="flex w-max animate-marquee gap-2.5 whitespace-nowrap">

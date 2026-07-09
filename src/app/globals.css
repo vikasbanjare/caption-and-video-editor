@@ -14,25 +14,27 @@
   --edge-2: 63 66 88;
   --ink: 240 240 247;
   --muted: 150 152 170;
-  --accent: 96 122 255; /* electric periwinkle-blue (Pulse) */
-  --accent-2: 162 96 255; /* violet — gradient partner */
-  --shadow: 0 0 0;
+  /* Accent = the Pulse logo mark's own gradient (#2C57E6 → #8FB0FF) — no violet */
+  --accent: 59 107 245; /* #3B6BF5 — logo blue */
+  --accent-2: 143 176 255; /* #8FB0FF — logo light stop */
+  --shadow: 6 10 26;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
   /* Light — bright, friendly, a whisper of lavender in the surfaces. */
-  --bg: 249 249 253;
+  --bg: 248 250 253;
   --surface: 255 255 255;
-  --surface-2: 245 244 253;
-  --surface-3: 237 236 250;
-  --edge: 228 226 243;
-  --edge-2: 206 203 231;
-  --ink: 24 22 40;
-  --muted: 103 101 124;
-  --accent: 82 92 240; /* deeper blue-violet for contrast on white */
-  --accent-2: 145 74 240;
-  --shadow: 60 54 120;
+  --surface-2: 243 246 251;
+  --surface-3: 235 240 248;
+  --edge: 224 230 240;
+  --edge-2: 201 210 226;
+  --ink: 22 26 38;
+  --muted: 100 106 122;
+  /* Accent = the Pulse logo blue, deepened for contrast on white */
+  --accent: 44 87 230; /* #2C57E6 — logo deep blue */
+  --accent-2: 74 130 240; /* #4A82F0 — brighter logo blue */
+  --shadow: 30 44 90;
   color-scheme: light;
 }
 
