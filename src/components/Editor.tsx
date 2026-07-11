@@ -10,6 +10,7 @@ import {
   holdCueGaps,
   applyKeywordHighlight,
   romanizeTranscript,
+  hasIndicScript,
   cuesFromWords,
   activeCueAt,
   styleFromPreset,
@@ -85,7 +86,8 @@ export default function Editor() {
   const [style, setStyle] = useState<CaptionStyle>(() =>
     styleFromPreset(DEFAULT_PRESET.id)
   );
-  const [language, setLanguage] = useState("en");
+  // "auto" = let Whisper detect; auto-romanize then cleans any Indic script.
+  const [language, setLanguage] = useState("auto");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("Upload a video to begin.");
   const [currentTime, setCurrentTime] = useState(0);
@@ -260,7 +262,12 @@ export default function Editor() {
         maxChars: 34,
       });
       out = holdCueGaps(out, 0.4);
-      if (language.toLowerCase().startsWith("hi")) {
+      // Auto-romanize: whenever the transcript contains Hindi (Devanagari) or
+      // Urdu (Arabic) script, convert to Latin Hinglish — regardless of the
+      // language picker. Whisper often auto-detects Hindustani speech as Urdu,
+      // and native script renders right-to-left (jumbled in the LTR renderer),
+      // so Latin is always what a Hinglish creator wants here.
+      if (out.some((c) => hasIndicScript(c.text))) {
         out = romanizeTranscript({ cues: out, language }).cues;
       }
       return applyKeywordHighlight(out);
@@ -383,9 +390,20 @@ export default function Editor() {
       setNoteMode(false);
       setSelectedId(null);
       resetHistory();
-      setCuesRaw(rec.cues || []);
-      setStage((rec.cues || []).length ? "cut" : "script");
-      setStatus(`Opened “${rec.title}”.`);
+      // auto-heal older projects saved with native-script (Devanagari/Urdu)
+      // captions: romanize to Latin Hinglish on open.
+      let cues = rec.cues || [];
+      const hadScript = cues.some((c) => hasIndicScript(c.text));
+      if (hadScript) {
+        cues = romanizeTranscript({ cues, language: rec.language }).cues;
+      }
+      setCuesRaw(cues);
+      setStage(cues.length ? "cut" : "script");
+      setStatus(
+        hadScript
+          ? `Opened “${rec.title}” — captions romanized to Hinglish.`
+          : `Opened “${rec.title}”.`
+      );
     },
     [resetHistory]
   );
@@ -878,8 +896,10 @@ export default function Editor() {
                 <div>
                   <span className="label">Spoken language</span>
                   <select value={language} onChange={(e) => setLanguage(e.target.value)} className="select">
+                    <option value="auto">Auto-detect</option>
                     <option value="en">English</option>
                     <option value="hi">Hindi → Hinglish</option>
+                    <option value="ur">Urdu → Hinglish</option>
                     <option value="es">Spanish</option>
                     <option value="fr">French</option>
                     <option value="de">German</option>
