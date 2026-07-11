@@ -136,25 +136,98 @@ export function splitWords(text: string, start: number, end: number): Word[] {
  * This is the knob that turns long subtitle lines into the punchy 3–4 word
  * captions short-form creators want.
  */
-export function regroupCues(cues: Cue[], wordsPerCue: number): Cue[] {
+export interface RegroupOptions {
+  /** break the cue after sentence-ending punctuation (. ! ? …) */
+  sentenceBreak?: boolean;
+  /** break the cue when the pause to the next word exceeds this (seconds) */
+  maxGapSec?: number;
+  /** break before a word that would push the cue past this many characters */
+  maxChars?: number;
+}
+
+/**
+ * ASR word hygiene (Pulse tech brief §4): never drop a word; force strictly
+ * increasing starts with a minimum visible window so zero/negative-length or
+ * out-of-order timestamps can't break karaoke or the timeline.
+ */
+export function sanitizeWords(words: Word[], minDur = 0.05): Word[] {
+  const out: Word[] = [];
+  let cursor = 0;
+  for (const w of words) {
+    if (!w || !String(w.text || "").trim()) continue;
+    let start = Number.isFinite(w.start) ? Math.max(w.start, cursor) : cursor;
+    let end = Number.isFinite(w.end) ? w.end : start + minDur;
+    if (end < start + minDur) end = start + minDur;
+    out.push({ ...w, text: String(w.text).trim(), start, end });
+    cursor = start + 0.001; // strictly increasing starts
+  }
+  return out;
+}
+
+const SENTENCE_END = /[.!?…।۔]["')\]]?$/;
+
+export function regroupCues(
+  cues: Cue[],
+  wordsPerCue: number,
+  opts: RegroupOptions = {}
+): Cue[] {
   const n = Math.max(1, Math.floor(wordsPerCue));
   const words = cues.flatMap((c) => c.words);
   if (words.length === 0) return [];
 
   const out: Cue[] = [];
-  for (let i = 0; i < words.length; i += n) {
-    const group = words.slice(i, i + n);
-    const start = group[0].start;
-    const end = group[group.length - 1].end;
+  let group: Word[] = [];
+  let chars = 0;
+
+  const flush = () => {
+    if (!group.length) return;
     out.push({
       id: nextId(),
-      start,
-      end,
+      start: group[0].start,
+      end: group[group.length - 1].end,
       text: group.map((w) => w.text).join(" "),
       words: group,
     });
+    group = [];
+    chars = 0;
+  };
+
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    // width break BEFORE adding (brief: cap width so text can't overflow the box)
+    if (
+      opts.maxChars &&
+      group.length > 0 &&
+      chars + 1 + w.text.length > opts.maxChars
+    ) {
+      flush();
+    }
+    group.push(w);
+    chars += (chars ? 1 : 0) + w.text.length;
+
+    const next = words[i + 1];
+    const full = group.length >= n;
+    const sentence = !!opts.sentenceBreak && SENTENCE_END.test(w.text);
+    const pause =
+      !!opts.maxGapSec && next !== undefined && next.start - w.end >= opts.maxGapSec;
+    if (full || sentence || pause || next === undefined) flush();
   }
   return out;
+}
+
+/**
+ * Hold each caption into a short following pause so captions don't blink
+ * between close cues; long silences still clear (after `holdSec`).
+ * (Pulse tech brief §4 · fillFrameGaps.)
+ */
+export function holdCueGaps(cues: Cue[], holdSec = 0.4): Cue[] {
+  return cues.map((c, i) => {
+    const next = cues[i + 1];
+    if (!next) return c;
+    const gap = next.start - c.end;
+    if (gap <= 0.01) return c;
+    return { ...c, end: Math.min(next.start, c.end + Math.min(gap, holdSec)) };
+  });
 }
 
 // ---------------------------------------------------------------------------

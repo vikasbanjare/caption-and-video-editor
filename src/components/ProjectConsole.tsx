@@ -306,7 +306,7 @@ function ProgramMonitor() {
       ...styleFromPreset(id),
       position: "center",
       marginV: 0,
-      fontScale: 0.066,
+      fontScale: 0.115, // renderer now scales by the small dimension (width on 9:16)
       maxWidth: 0.84,
     }));
 

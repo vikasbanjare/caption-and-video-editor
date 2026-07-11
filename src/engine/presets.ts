@@ -23,7 +23,11 @@ export interface StylePreset {
   style: CaptionStyle;
 }
 
-const REF_H = 1080; // plugin font sizes are px on a ~1080-tall frame
+// Calibration (Pulse tech brief §3 / §5 row 1): template fontSize is the
+// plugin's "Size" unit where 90 ≙ the engine's AUTHORED 75 px face on a
+// 1080-px small dimension — so the true proportion is fs·(75/90)/1080 =
+// fs/1296. Guessing "90 px" was literally the plugin team's first shipped bug.
+const REF_H = 1296;
 
 // ---- colour helpers --------------------------------------------------------
 function hexRgb(hex: string): [number, number, number] {

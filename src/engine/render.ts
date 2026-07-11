@@ -63,7 +63,11 @@ export function renderFrame({
   ctx.clearRect(0, 0, width, height);
   if (!cue || cue.words.length === 0) return;
 
-  let fontPx = Math.max(8, style.fontScale * height);
+  // Calibration (Pulse tech brief §3): the engine's authored face lives on a
+  // 1080-wide portrait / 1080-tall landscape frame — i.e. the SMALL dimension.
+  // Scaling by height alone oversized portrait captions relative to width.
+  const refDim = Math.min(height, width);
+  let fontPx = Math.max(8, style.fontScale * refDim);
   const maxW = style.maxWidth * width;
   const disp = (w: Word) => transformText(w.text, style);
 

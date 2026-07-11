@@ -6,6 +6,8 @@ import {
   parseSRT,
   serializeSRT,
   regroupCues,
+  sanitizeWords,
+  holdCueGaps,
   applyKeywordHighlight,
   romanizeTranscript,
   cuesFromWords,
@@ -248,7 +250,16 @@ export default function Editor() {
 
   const finalize = useCallback(
     (raw: Cue[], s: CaptionStyle): Cue[] => {
-      let out = regroupCues(raw, s.wordsPerCue);
+      // Pulse tech brief §4: sanitize word timings (never drop a word, strictly
+      // increasing starts), regroup with sentence/pause/width breaks, then hold
+      // each caption into short pauses so captions don't blink.
+      const words = sanitizeWords(raw.flatMap((c) => c.words));
+      let out = regroupCues(cuesFromWords(words), s.wordsPerCue, {
+        sentenceBreak: true,
+        maxGapSec: 0.8,
+        maxChars: 34,
+      });
+      out = holdCueGaps(out, 0.4);
       if (language.toLowerCase().startsWith("hi")) {
         out = romanizeTranscript({ cues: out, language }).cues;
       }
