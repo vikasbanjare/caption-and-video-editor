@@ -10,6 +10,7 @@ import {
 } from "@/engine";
 import { timeAgo, type ProjectRecord } from "@/lib/store";
 import { fmtClock } from "@/lib/transcript";
+import ImageTools from "./ImageTools";
 
 // template names for the marquee (real, from the catalog) + the room tour
 const MARQUEE: string[] = PRESETS.slice(0, 28).map((p) => p.label);
@@ -44,6 +45,7 @@ export default function ProjectConsole({
 }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const [imageTool, setImageTool] = useState(false);
   const pick = () => input.current?.click();
 
   return (
@@ -97,9 +99,12 @@ export default function ProjectConsole({
               <button className="btn btn-primary text-[15px]" onClick={pick}>
                 <PlusIcon /> New from media
               </button>
-              <span className="font-mono text-[11px] text-muted">
-                or drop a file anywhere
-              </span>
+              <button
+                className="btn btn-ghost text-[13px]"
+                onClick={() => setImageTool(true)}
+              >
+                <SparkIcon /> Remove image background
+              </button>
             </div>
 
             <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge pt-4 font-mono text-[11px] uppercase tracking-label text-muted">
@@ -257,6 +262,8 @@ export default function ProjectConsole({
           </div>
         </section>
       </div>
+
+      {imageTool && <ImageTools onClose={() => setImageTool(false)} />}
     </div>
   );
 }
