@@ -24,6 +24,8 @@ export interface ExportOptions {
   filter?: string;
   /** keep-segments (silence-cut): play only these source ranges → tightened output */
   segments?: Range[];
+  /** clean up audio: rumble/hum high-pass + presence + leveling compressor */
+  enhanceAudio?: boolean;
   fps?: number;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -66,6 +68,7 @@ export async function exportBurnIn({
   duration,
   filter,
   segments,
+  enhanceAudio,
   fps = 30,
   onProgress,
   signal,
@@ -111,7 +114,31 @@ export async function exportBurnIn({
       audioCtx = new AC();
       const srcNode = audioCtx.createMediaElementSource(video);
       const dest = audioCtx.createMediaStreamDestination();
-      srcNode.connect(dest); // into the file only (not to speakers)
+      if (enhanceAudio) {
+        // rumble/hum high-pass → presence shelf → leveling compressor
+        const hp = audioCtx.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 85;
+        const shelf = audioCtx.createBiquadFilter();
+        shelf.type = "highshelf";
+        shelf.frequency.value = 6000;
+        shelf.gain.value = 3;
+        const comp = audioCtx.createDynamicsCompressor();
+        comp.threshold.value = -26;
+        comp.knee.value = 24;
+        comp.ratio.value = 3;
+        comp.attack.value = 0.004;
+        comp.release.value = 0.2;
+        const makeup = audioCtx.createGain();
+        makeup.gain.value = 1.4;
+        srcNode.connect(hp);
+        hp.connect(shelf);
+        shelf.connect(comp);
+        comp.connect(makeup);
+        makeup.connect(dest);
+      } else {
+        srcNode.connect(dest); // into the file only (not to speakers)
+      }
       audioTracks = dest.stream.getAudioTracks();
     }
   } catch {

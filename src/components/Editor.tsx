@@ -105,6 +105,9 @@ export default function Editor() {
   const [silencePlan, setSilencePlan] = useState<SilencePlan | null>(null);
   const silencePlanRef = useRef<SilencePlan | null>(null);
   silencePlanRef.current = silencePlan;
+  const [enhanceAudio, setEnhanceAudio] = useState(false);
+  const enhanceAudioRef = useRef(enhanceAudio);
+  enhanceAudioRef.current = enhanceAudio;
   const srtInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -572,6 +575,7 @@ export default function Editor() {
           ? gradeFilter(gradeRef.current)
           : undefined,
         segments: silencePlanRef.current?.segments,
+        enhanceAudio: enhanceAudioRef.current,
         onProgress: (f) => setExportPct(f),
       });
       const base = (title || "pulse-captions").replace(/[^\w-]+/g, "_");
@@ -1062,7 +1066,20 @@ export default function Editor() {
                   </span>
                 )}
               </p>
-              <div className="mt-5 space-y-2">
+              <label className="mt-4 flex items-center justify-between rounded-lg border border-edge bg-surface2 px-3 py-2 text-[13px]">
+                <span>
+                  Enhance audio{" "}
+                  <span className="font-mono text-[10px] text-muted">rumble filter · leveling</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={enhanceAudio}
+                  onChange={(e) => setEnhanceAudio(e.target.checked)}
+                  disabled={exportPct !== null}
+                  className="h-4 w-4 accent-accent"
+                />
+              </label>
+              <div className="mt-3 space-y-2">
                 <button
                   className="btn btn-primary w-full justify-center"
                   onClick={handleExportVideo}
