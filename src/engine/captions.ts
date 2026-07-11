@@ -1,5 +1,5 @@
 import type { Cue, Transcript, Word } from "./types";
-import { devanagariToLatin, hasDevanagari } from "./romanize";
+import { hasIndicScript, toLatin } from "./romanize";
 
 /**
  * The caption "brain": SRT parse/serialize, word-by-word splitting, regrouping
@@ -220,12 +220,12 @@ export function applyKeywordHighlight(cues: Cue[], keywords?: string[]): Cue[] {
 /** Romanize any Devanagari in a transcript's cue/word text (Hinglish). */
 export function romanizeTranscript(transcript: Transcript): Transcript {
   const cues = transcript.cues.map((c) => {
-    if (!hasDevanagari(c.text)) return c;
+    if (!hasIndicScript(c.text)) return c;
     return {
       ...c,
-      text: devanagariToLatin(c.text),
+      text: toLatin(c.text),
       words: c.words.map((w) =>
-        hasDevanagari(w.text) ? { ...w, text: devanagariToLatin(w.text) } : w
+        hasIndicScript(w.text) ? { ...w, text: toLatin(w.text) } : w
       ),
     };
   });

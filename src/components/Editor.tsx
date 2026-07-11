@@ -449,6 +449,18 @@ export default function Editor() {
   );
 
   // ---- Pulse tools -----------------------------------------------------------
+  const handleRomanize = useCallback(() => {
+    const before = cuesRef.current;
+    const romanized = romanizeTranscript({ cues: before, language }).cues;
+    const changed = romanized.some((c, i) => c.text !== before[i]?.text);
+    if (!changed) {
+      setStatus("Captions are already in Latin — nothing to romanize.");
+      return;
+    }
+    commit(romanized);
+    setStatus("Romanized Hindi/Urdu script → Latin Hinglish.");
+  }, [language, commit]);
+
   const handleCleanUp = useCallback(() => {
     const { cues: next, removed } = removeFillerWords(cuesRef.current);
     if (removed === 0) {
@@ -895,6 +907,14 @@ export default function Editor() {
                       Chapters
                     </button>
                   </div>
+                  <button
+                    className="btn mt-2 w-full justify-center"
+                    onClick={handleRomanize}
+                    disabled={!cues.length}
+                    title="Transliterate Hindi/Urdu script → Roman Hinglish (also fixes right-to-left captions)"
+                  >
+                    Romanize → Hinglish
+                  </button>
                   <button
                     className={`btn mt-2 w-full justify-center ${silencePlan ? "btn-primary" : ""}`}
                     onClick={handleRemoveSilences}

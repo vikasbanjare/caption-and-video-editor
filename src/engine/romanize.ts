@@ -139,3 +139,75 @@ export function hasDevanagari(input: string): boolean {
   for (const ch of input) if (isDevanagari(ch)) return true;
   return false;
 }
+
+// ---------------------------------------------------------------------------
+// Urdu / Arabic-script → Latin. Whisper often decodes Hindustani speech as Urdu
+// (Hindi and Urdu are the same spoken language), so a Hinglish creator gets
+// right-to-left Arabic script. This pragmatic phonetic map transliterates it to
+// Latin so it reads as the Roman "Hinglish"/"Urdulish" the audience expects —
+// and, being Latin, it lays out left-to-right in the caption renderer.
+
+const ARABIC_MAP: Record<string, string> = {
+  "ا": "a", "آ": "aa", "أ": "a", "إ": "i", "ٱ": "a",
+  "ب": "b", "پ": "p", "ت": "t", "ٹ": "t", "ث": "s",
+  "ج": "j", "چ": "ch", "ح": "h", "خ": "kh",
+  "د": "d", "ڈ": "d", "ذ": "z", "ر": "r", "ڑ": "r",
+  "ز": "z", "ژ": "zh", "س": "s", "ش": "sh", "ص": "s",
+  "ض": "z", "ط": "t", "ظ": "z", "ع": "a", "غ": "gh",
+  "ف": "f", "ق": "q", "ک": "k", "ك": "k", "گ": "g",
+  "ل": "l", "م": "m", "ن": "n", "ں": "n", "و": "o",
+  "ؤ": "o", "ہ": "h", "ھ": "h", "ة": "h", "ه": "h",
+  "ء": "", "ئ": "y", "ی": "i", "ي": "i", "ے": "e", "ى": "a",
+  // short-vowel diacritics
+  "َ": "a", "ِ": "i", "ُ": "u", "ً": "an", "ٍ": "in", "ٌ": "un",
+  "ْ": "", "ّ": "", "ٰ": "a",
+  // punctuation & digits
+  "۔": ".", "،": ",", "؟": "?", "٪": "%", "ـ": "",
+  "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+  "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
+  "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+  "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+};
+
+const isArabic = (ch: string) => {
+  const c = ch.codePointAt(0) || 0;
+  return (
+    (c >= 0x0600 && c <= 0x06ff) ||
+    (c >= 0x0750 && c <= 0x077f) ||
+    (c >= 0xfb50 && c <= 0xfdff) ||
+    (c >= 0xfe70 && c <= 0xfeff)
+  );
+};
+
+/** True if the string contains any Arabic-script (e.g. Urdu) characters. */
+export function hasArabic(input: string): boolean {
+  for (const ch of input) if (isArabic(ch)) return true;
+  return false;
+}
+
+/** Transliterate Arabic-script (Urdu) to Latin; other characters pass through. */
+export function arabicToLatin(input: string): string {
+  let out = "";
+  for (const ch of input) {
+    if (ARABIC_MAP[ch] !== undefined) out += ARABIC_MAP[ch];
+    else if (isArabic(ch)) continue; // unknown Arabic mark — drop
+    else out += ch;
+  }
+  return out.replace(/[ \t]+/g, " ").trim();
+}
+
+/** True if the string contains any non-Latin Indic/Urdu script. */
+export function hasIndicScript(input: string): boolean {
+  return hasDevanagari(input) || hasArabic(input);
+}
+
+/**
+ * Romanize whichever non-Latin script is present (Devanagari or Urdu/Arabic)
+ * to Latin, leaving English words, numbers, punctuation and emoji untouched.
+ */
+export function toLatin(input: string): string {
+  let out = input;
+  if (hasDevanagari(out)) out = devanagariToLatin(out);
+  if (hasArabic(out)) out = arabicToLatin(out);
+  return out;
+}
