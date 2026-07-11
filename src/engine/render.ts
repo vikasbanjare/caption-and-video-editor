@@ -368,8 +368,12 @@ function drawWord(
       ctx.restore();
     }
 
-    // drop shadow for readability (can coexist with glow now)
-    if (style.shadowBlur > 0) {
+    // drop shadow for readability (can coexist with glow now). Offsets moved
+    // away from their defaults (x=0, y=0.045) cast a hard shadow even at
+    // blur 0, so the offset sliders always have a visible effect.
+    const offsetsSet =
+      !!style.shadowOffsetX || (style.shadowOffsetY !== undefined && style.shadowOffsetY !== 0.045);
+    if (style.shadowBlur > 0 || offsetsSet) {
       ctx.shadowColor = style.shadowColor;
       ctx.shadowBlur = style.shadowBlur * fontPx;
       ctx.shadowOffsetX = (style.shadowOffsetX || 0) * fontPx;
@@ -386,11 +390,13 @@ function drawWord(
       ctx.strokeText(lw.display, lw.x, lw.y);
       ctx.restore();
     }
-    if (style.strokeColor && style.strokeWidth > 0) {
+    if (style.strokeWidth > 0) {
+      // width alone is enough — an unset colour defaults to black so the
+      // Outline slider always has a visible effect
       ctx.save();
       ctx.globalAlpha = wordAlpha * (style.strokeOpacity ?? 1);
       ctx.lineWidth = style.strokeWidth * fontPx;
-      ctx.strokeStyle = style.strokeColor;
+      ctx.strokeStyle = style.strokeColor || "#000000";
       ctx.strokeText(lw.display, lw.x, lw.y);
       ctx.restore();
     }

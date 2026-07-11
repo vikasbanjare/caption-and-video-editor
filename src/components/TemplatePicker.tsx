@@ -103,6 +103,11 @@ function Chip({
   );
 }
 
+// Tiles PLAY the real animation (Pulse tech brief §3/§6: the gallery card
+// plays the same engine/frames as the editor, not a frozen thumbnail). One
+// shared clock; each tile animates only while on screen.
+const LOOP_SEC = 2.4; // 1.5s cue + a beat of rest before it loops
+
 function Thumb({ preset }: { preset: StylePreset }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -112,11 +117,18 @@ function Thumb({ preset }: { preset: StylePreset }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
     const W = (canvas.width = Math.round(150 * dpr));
     const H = (canvas.height = Math.round(96 * dpr));
+    const style = {
+      ...preset.style,
+      position: "center" as const,
+      marginV: 0,
+      fontScale: preset.style.maxLines === 1 ? 0.16 : 0.2,
+      maxWidth: 0.94,
+    };
 
-    const draw = () => {
+    const draw = (t: number) => {
       const g = ctx.createLinearGradient(0, 0, W, H);
       g.addColorStop(0, "#2b2350");
       g.addColorStop(1, "#16203a");
@@ -125,23 +137,41 @@ function Thumb({ preset }: { preset: StylePreset }) {
       renderFrame({
         ctx,
         cue: SAMPLE,
-        style: {
-          ...preset.style,
-          position: "center",
-          marginV: 0,
-          fontScale: preset.style.maxLines === 1 ? 0.16 : 0.2,
-          maxWidth: 0.94,
-        },
-        time: PREVIEW_TIME,
+        style,
+        time: Math.min(t, SAMPLE.end - 0.01),
         width: W,
         height: H,
       });
     };
 
-    draw();
+    let raf = 0;
+    let visible = false;
+    const loop = () => {
+      if (!visible) return;
+      draw((performance.now() / 1000) % LOOP_SEC);
+      raf = requestAnimationFrame(loop);
+    };
+    const io = new IntersectionObserver(([e]) => {
+      const nowVisible = !!e?.isIntersecting;
+      if (nowVisible && !visible) {
+        visible = true;
+        raf = requestAnimationFrame(loop);
+      } else if (!nowVisible) {
+        visible = false;
+        cancelAnimationFrame(raf);
+      }
+    });
+    io.observe(canvas);
+
+    draw(PREVIEW_TIME); // static first paint (also the reduced-motion fallback)
     const fonts = (document as unknown as { fonts?: { ready: Promise<unknown> } })
       .fonts;
-    fonts?.ready.then(draw).catch(() => {});
+    fonts?.ready.then(() => draw(PREVIEW_TIME)).catch(() => {});
+
+    return () => {
+      io.disconnect();
+      cancelAnimationFrame(raf);
+    };
   }, [preset]);
 
   return <canvas ref={ref} className="block h-[96px] w-full" />;
