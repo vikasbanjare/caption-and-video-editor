@@ -51,6 +51,7 @@ import { buildStubSrt } from "@/server/transcription/stub";
 import { exportBurnIn, downloadBlob, isExportSupported } from "@/lib/export";
 import { buildAss } from "@/lib/ass";
 import { buildOtio, buildMarkerCsv } from "@/lib/interchange";
+import { planSilenceCut, type SilencePlan } from "@/lib/silence";
 import {
   DEFAULT_GRADE,
   gradeFilter,
@@ -101,6 +102,9 @@ export default function Editor() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [safeZones, setSafeZones] = useState(false);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [silencePlan, setSilencePlan] = useState<SilencePlan | null>(null);
+  const silencePlanRef = useRef<SilencePlan | null>(null);
+  silencePlanRef.current = silencePlan;
   const srtInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -465,6 +469,24 @@ export default function Editor() {
     );
   }, [chapters]);
 
+  const handleRemoveSilences = useCallback(() => {
+    if (silencePlanRef.current) {
+      setSilencePlan(null);
+      setStatus("Silence-cut cleared — export keeps the full length.");
+      return;
+    }
+    const dur = transcriptDuration(cuesRef.current) || duration || 0;
+    const plan = planSilenceCut(cuesRef.current, dur, { minGapSec: 0.6, padSec: 0.1 });
+    if (!plan.cuts.length) {
+      setStatus("No dead air over 0.6s found.");
+      return;
+    }
+    setSilencePlan(plan);
+    setStatus(
+      `${plan.cuts.length} silent gap${plan.cuts.length > 1 ? "s" : ""} — export removes ${plan.removedSec.toFixed(1)}s (→ ${plan.outDurationSec.toFixed(1)}s).`
+    );
+  }, [duration]);
+
   const resetCaptionPos = useCallback(() => {
     handleStyleChange({ offsetX: 0, offsetY: 0 });
     setStatus("Caption position reset.");
@@ -549,6 +571,7 @@ export default function Editor() {
         filter: isGradeActive(gradeRef.current)
           ? gradeFilter(gradeRef.current)
           : undefined,
+        segments: silencePlanRef.current?.segments,
         onProgress: (f) => setExportPct(f),
       });
       const base = (title || "pulse-captions").replace(/[^\w-]+/g, "_");
@@ -868,6 +891,16 @@ export default function Editor() {
                       Chapters
                     </button>
                   </div>
+                  <button
+                    className={`btn mt-2 w-full justify-center ${silencePlan ? "btn-primary" : ""}`}
+                    onClick={handleRemoveSilences}
+                    disabled={!cues.length}
+                    title="Detect dead-air gaps; the exported video is tightened to remove them"
+                  >
+                    {silencePlan
+                      ? `Silence-cut on · −${silencePlan.removedSec.toFixed(1)}s`
+                      : "Remove silences"}
+                  </button>
                   {chapters.length > 0 && (
                     <div className="mt-2 rounded border border-edge bg-surface2">
                       <div className="flex items-center justify-between border-b border-edge px-2.5 py-1.5">
@@ -1023,6 +1056,11 @@ export default function Editor() {
               <h2 className="mt-1.5 font-display text-2xl font-semibold">Deliver captions</h2>
               <p className="mt-2 text-sm text-muted">
                 {cues.length} cues · {effectiveDuration.toFixed(1)}s
+                {silencePlan && (
+                  <span className="text-accent">
+                    {" "}· silence-cut → {silencePlan.outDurationSec.toFixed(1)}s
+                  </span>
+                )}
               </p>
               <div className="mt-5 space-y-2">
                 <button
@@ -1032,7 +1070,9 @@ export default function Editor() {
                 >
                   {exportPct !== null
                     ? `Rendering… ${Math.round(exportPct * 100)}%`
-                    : "Export video · captions burned in"}
+                    : silencePlan
+                      ? "Export video · captions + silence-cut"
+                      : "Export video · captions burned in"}
                 </button>
                 {exportPct !== null && (
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface3">

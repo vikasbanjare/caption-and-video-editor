@@ -1,4 +1,5 @@
 import { renderFrame, activeCueAt, type Cue, type CaptionStyle } from "@/engine";
+import type { Range } from "./silence";
 
 /**
  * Burn captions into a downloadable video, entirely in the browser.
@@ -21,6 +22,8 @@ export interface ExportOptions {
   duration: number;
   /** CSS/canvas filter string for the color grade (applied to the video frame) */
   filter?: string;
+  /** keep-segments (silence-cut): play only these source ranges → tightened output */
+  segments?: Range[];
   fps?: number;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -62,6 +65,7 @@ export async function exportBurnIn({
   style,
   duration,
   filter,
+  segments,
   fps = 30,
   onProgress,
   signal,
@@ -151,27 +155,66 @@ export async function exportBurnIn({
 
   signal?.addEventListener("abort", finish, { once: true });
 
-  const endT = duration > 0 && isFinite(duration) ? duration : Infinity;
+  // silence-cut: play only the kept segments, in order, skipping the gaps
+  const segs = segments && segments.length ? segments : null;
+  const outDur = segs
+    ? segs.reduce((a, s) => a + (s.end - s.start), 0)
+    : duration;
+  const endT = outDur > 0 && isFinite(outDur) ? outDur : Infinity;
+  let segIdx = 0;
+  let outBase = 0; // output time accumulated from completed segments
+  let seeking = false;
 
-  const draw = () => {
-    if (finished) return;
-    // grade the video frame (captions stay ungraded — drawn after filter reset)
+  const drawFrame = (outT: number) => {
     ctx.filter = filter && filter !== "none" ? filter : "none";
     ctx.drawImage(video, 0, 0, W, H);
     ctx.filter = "none";
     const t = video.currentTime;
-    const cue = activeCueAt(cues, t);
+    const cue = activeCueAt(cues, t); // captions keyed to SOURCE time → stay synced
     renderFrame({ ctx: capCtx, cue, style, time: t, width: W, height: H });
     ctx.drawImage(capCanvas, 0, 0);
-    if (onProgress && endT !== Infinity) onProgress(Math.min(1, t / endT));
-    if (video.ended || (endT !== Infinity && t >= endT - 0.02)) {
-      finish();
+    if (onProgress && endT !== Infinity) onProgress(Math.min(1, outT / endT));
+  };
+
+  const draw = () => {
+    if (finished) return;
+    if (seeking) {
+      rafId = requestAnimationFrame(draw);
       return;
+    }
+    if (segs) {
+      const seg = segs[segIdx];
+      const outT = outBase + Math.max(0, video.currentTime - seg.start);
+      drawFrame(outT);
+      if (video.currentTime >= seg.end - 0.02 || video.ended) {
+        outBase += seg.end - seg.start;
+        segIdx++;
+        if (segIdx >= segs.length) {
+          finish();
+          return;
+        }
+        // jump to the next kept segment without recording the seek
+        seeking = true;
+        if (rec.state === "recording") rec.pause();
+        video.currentTime = segs[segIdx].start;
+        video.onseeked = () => {
+          video.onseeked = null;
+          seeking = false;
+          if (!finished && rec.state === "paused") rec.resume();
+        };
+      }
+    } else {
+      drawFrame(video.currentTime);
+      if (video.ended || (endT !== Infinity && video.currentTime >= endT - 0.02)) {
+        finish();
+        return;
+      }
     }
     rafId = requestAnimationFrame(draw);
   };
 
-  video.currentTime = 0;
+  video.currentTime = segs ? segs[0].start : 0;
+  if (segs) await new Promise<void>((res) => { video.onseeked = () => { video.onseeked = null; res(); }; });
   rec.start();
   try {
     await video.play();
@@ -180,7 +223,7 @@ export async function exportBurnIn({
     finish();
     throw new Error("Playback was blocked — click Export again.");
   }
-  video.onended = finish;
+  if (!segs) video.onended = finish;
   rafId = requestAnimationFrame(draw);
 
   await stopped;
