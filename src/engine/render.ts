@@ -32,7 +32,15 @@ const easeOutBack = (t: number) => {
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 };
-const easeBounce = (t: number) => 1 + 0.16 * Math.sin(Math.min(1, t) * Math.PI);
+/** true bounce easing — drops in and rebounds (0 → 1 with bounces) */
+const easeOutBounce = (t: number) => {
+  const n1 = 7.5625;
+  const d1 = 2.75;
+  if (t < 1 / d1) return n1 * t * t;
+  if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75;
+  if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375;
+  return n1 * (t -= 2.625 / d1) * t + 0.984375;
+};
 
 interface Entrance {
   hidden: boolean;
@@ -40,7 +48,21 @@ interface Entrance {
   dx: number;
   dy: number;
   alpha: number;
+  /** entrance blur in px (blurdissolve) */
+  blur?: number;
+  /** 0..1 horizontal reveal fraction (typewriter) */
+  clipX?: number;
 }
+
+/** Continuous per-word motion that runs the whole time a cue is visible. */
+interface Loop {
+  dx: number;
+  dy: number;
+  scale: number;
+  alpha: number;
+}
+
+const LOOP_NONE: Loop = { dx: 0, dy: 0, scale: 1, alpha: 1 };
 
 interface LaidWord {
   word: Word;
@@ -49,6 +71,7 @@ interface LaidWord {
   y: number;
   w: number;
   line: number;
+  idx: number;
   en: Entrance;
 }
 
@@ -140,6 +163,7 @@ export function renderFrame({
 
   // ---- positioned words + per-word entrance ----------------------------------
   const laid: LaidWord[] = [];
+  let wordIdx = 0;
   lines.forEach((ln, li) => {
     let x = lineX(ln.w);
     const y = topY + li * lineH + fontPx;
@@ -151,8 +175,10 @@ export function renderFrame({
         y,
         w: it.w,
         line: li,
-        en: entranceFor(it.word, cue, time, style, width, height),
+        idx: wordIdx,
+        en: entranceFor(it.word, cue, time, style, width, height, wordIdx),
       });
+      wordIdx++;
       x += it.w + space;
     }
   });
@@ -262,7 +288,10 @@ function drawWord(
   const emph = isEmphasised(word, time, style);
   const spoken = time >= word.start;
 
-  let wordAlpha = cueAlpha * en.alpha * (style.textOpacity ?? 1);
+  // continuous per-word motion (wave/shake/glitch/pulse/bob)
+  const loop = loopFor(style, time, lw.idx, fontPx);
+
+  let wordAlpha = cueAlpha * en.alpha * loop.alpha * (style.textOpacity ?? 1);
   if (style.upcomingOpacity < 1 && !spoken && style.animation !== "word-by-word")
     wordAlpha *= style.upcomingOpacity;
 
@@ -272,10 +301,13 @@ function drawWord(
     const prog = clamp01((time - word.start) / Math.max(0.08, word.end - word.start));
     bounceDy = -Math.sin(prog * Math.PI) * style.activeBounce * fontPx;
   }
-  const enT: Entrance = bounceDy ? { ...en, dy: en.dy + bounceDy } : en;
-  const lwT: LaidWord = bounceDy ? { ...lw, en: enT } : lw;
+  const extraDx = loop.dx;
+  const extraDy = loop.dy + bounceDy;
+  const enT: Entrance =
+    extraDx || extraDy ? { ...en, dx: en.dx + extraDx, dy: en.dy + extraDy } : en;
+  const lwT: LaidWord = enT !== en ? { ...lw, en: enT } : lw;
 
-  const scale = en.scale * emphasisScale(word, time, style);
+  const scale = en.scale * loop.scale * emphasisScale(word, time, style);
   const useKeywordFont = emph && style.keywordFontFamily;
   const fill = fillFor(ctx, lw, style, fontPx, emph);
   const glowActive = style.glow > 0 && (emph || style.emphasis !== "keyword");
@@ -288,6 +320,26 @@ function drawWord(
       ctx.font = `${style.keywordItalic ? "italic " : ""}${style.fontWeight} ${fontPx}px ${style.keywordFontFamily}`;
     }
     ctx.lineJoin = "round";
+
+    // entrance blur (blurdissolve): defocus that resolves to sharp
+    if (en.blur && en.blur > 0.3) {
+      try {
+        ctx.filter = `blur(${en.blur.toFixed(1)}px)`;
+      } catch {
+        /* node-canvas has no filter */
+      }
+    }
+    // typewriter: clip the word to the fraction of characters "typed" so far
+    if (en.clipX !== undefined && en.clipX < 1) {
+      ctx.beginPath();
+      ctx.rect(
+        lw.x - fontPx * 0.12,
+        lw.y - fontPx * 1.25,
+        lw.w * en.clipX + fontPx * 0.12,
+        fontPx * 1.7
+      );
+      ctx.clip();
+    }
 
     // long / hard shadow (extrude) behind everything
     if (style.longShadow > 0) {
@@ -407,68 +459,127 @@ function entranceFor(
   time: number,
   style: CaptionStyle,
   w: number,
-  h: number
+  h: number,
+  idx: number
 ): Entrance {
   const a = style.animation;
   const base: Entrance = { hidden: false, scale: 1, dx: 0, dy: 0, alpha: 1 };
 
-  // per-word reveal animations
+  // spoken-word reveal animations (word appears when it's said)
   if (a === "word-by-word" || a === "reveal" || a === "typewriter") {
-    if (time < word.start)
-      return a === "typewriter"
-        ? { ...base, hidden: true }
-        : { ...base, hidden: true };
+    if (time < word.start) return { ...base, hidden: true };
     const p = clamp01((time - word.start) / Math.max(0.03, (style.wordStaggerMs || 120) / 1000));
+    if (a === "typewriter") {
+      // characters tick in one by one across the word's spoken duration
+      const chars = Math.max(1, word.text.length);
+      const wp = clamp01((time - word.start) / Math.max(0.1, (word.end - word.start) * 0.8));
+      return { ...base, clipX: Math.ceil(wp * chars) / chars };
+    }
     return {
       hidden: false,
       scale: a === "reveal" ? easeOutBack(Math.min(1, p * 1.4)) : 0.9 + 0.1 * easeOut(p),
       dx: 0,
       dy: 0,
-      alpha: a === "typewriter" ? 1 : p,
+      alpha: p,
     };
   }
 
-  const p = clamp01((time - cue.start) / Math.max(0.05, (style.animInMs || 260) / 1000));
-  const done = p >= 1;
+  const inSec = Math.max(0.05, (style.animInMs || 260) / 1000);
+  const p = clamp01((time - cue.start) / inSec); // whole-cue progress
+  // per-word staggered progress — words enter one after another
+  const stagger = Math.max(0.02, ((style.wordStaggerMs || 120) / 1000) * 0.5);
+  const pw = clamp01((time - cue.start - idx * stagger) / inSec);
+
   switch (a) {
-    case "pop":
-      return { ...base, scale: easeOutBack(Math.min(1, p * 1.4)) };
-    case "bounce":
-      return { ...base, scale: easeBounce(p) };
-    case "scale":
-      return { ...base, scale: 0.7 + 0.3 * easeOut(p), alpha: Math.min(1, p * 1.6) };
-    case "zoom":
-      return { ...base, scale: 1.6 - 0.6 * easeOut(p), alpha: Math.min(1, p * 2) };
-    case "zoompunch":
-      return { ...base, scale: 1.9 - 0.9 * easeOut(Math.min(1, p * 1.4)) };
-    case "slide-up":
-      return { ...base, dy: (1 - easeOut(p)) * 0.07 * h, alpha: Math.min(1, p * 1.6) };
-    case "glide":
-      return { ...base, dy: (1 - easeOut(p)) * 0.05 * h, alpha: Math.min(1, p * 1.6) };
-    case "wave":
-      return { ...base, dy: done ? 0 : Math.sin(p * Math.PI) * -0.035 * h };
-    case "shake":
-      return { ...base, dx: done ? 0 : Math.sin(time * 55) * (1 - p) * 0.02 * w };
-    case "whoosh":
+    case "pop": // each word pops in with overshoot, one after another
       return {
         ...base,
-        dx: (1 - easeOut(p)) * -0.28 * w,
+        scale: pw <= 0 ? 0.01 : easeOutBack(Math.min(1, pw * 1.4)),
+        alpha: Math.min(1, pw * 4),
+      };
+    case "bounce": // words DROP in from above and bounce on landing
+      return {
+        ...base,
+        dy: -(1 - easeOutBounce(pw)) * 2.2 * (fontOf(style, w, h)),
+        alpha: Math.min(1, pw * 4),
+      };
+    case "scale": // whole block grows gently from 70%
+      return { ...base, scale: 0.7 + 0.3 * easeOut(p), alpha: Math.min(1, p * 1.6) };
+    case "zoom": // whole block lands from 160%
+      return { ...base, scale: 1.6 - 0.6 * easeOut(p), alpha: Math.min(1, p * 2) };
+    case "zoompunch": // violent 190% smash-in (plus a continuous pulse via loopFor)
+      return { ...base, scale: 1.9 - 0.9 * easeOut(Math.min(1, p * 1.4)) };
+    case "slide-up": // block rises from below
+      return { ...base, dy: (1 - easeOut(p)) * 0.07 * h, alpha: Math.min(1, p * 1.6) };
+    case "glide": // block drifts in from the LEFT, smooth and slow
+      return { ...base, dx: (1 - easeOut(p)) * -0.1 * w, alpha: Math.min(1, p * 1.3) };
+    case "whoosh": // fast fling from the left with overshoot past the mark
+      return {
+        ...base,
+        dx: (1 - easeOutBack(Math.min(1, p))) * -0.28 * w,
         scale: 1 + (1 - p) * 0.08,
         alpha: Math.min(1, p * 2),
       };
-    case "blurdissolve":
-      return { ...base, scale: 0.95 + 0.05 * p, alpha: p };
-    case "glitch":
-      if (done) return base;
-      return {
-        ...base,
-        dx: Math.sin(time * 90) * 0.012 * w,
-        alpha: Math.floor(time * 30) % 2 ? 0.6 : 1,
-      };
+    case "blurdissolve": // defocus → sharp
+      return { ...base, scale: 0.97 + 0.03 * p, alpha: Math.min(1, p * 1.4), blur: (1 - p) * 10 };
     case "fade":
       return { ...base, alpha: p };
+    case "wave":
+    case "shake":
+    case "glitch":
+      // continuous motions (loopFor) — entrance is just a quick fade-in
+      return { ...base, alpha: Math.min(1, p * 3) };
     default:
       return base; // none, karaoke
+  }
+}
+
+function fontOf(style: CaptionStyle, w: number, h: number): number {
+  return Math.max(8, style.fontScale * Math.min(w, h));
+}
+
+/**
+ * Continuous per-word motion for the lifetime of the cue — this is what makes
+ * wave/shake/glitch/zoompunch/bounce look ALIVE instead of freezing after the
+ * entrance (they previously zeroed out once "done").
+ */
+function loopFor(
+  style: CaptionStyle,
+  time: number,
+  idx: number,
+  fontPx: number
+): Loop {
+  switch (style.animation) {
+    case "wave": // words undulate in a travelling wave
+      return {
+        ...LOOP_NONE,
+        dy: Math.sin(time * 5.2 - idx * 0.85) * fontPx * 0.16,
+      };
+    case "shake": // constant nervous jitter, per word
+      return {
+        ...LOOP_NONE,
+        dx: Math.sin(time * 47 + idx * 1.7) * fontPx * 0.055,
+        dy: Math.cos(time * 59 + idx * 2.3) * fontPx * 0.045,
+      };
+    case "glitch": {
+      // periodic corruption bursts: violent x-tears + flicker, then clean
+      const phase = (time + idx * 0.13) % 0.9;
+      if (phase < 0.16) {
+        return {
+          ...LOOP_NONE,
+          dx: Math.sin(time * 93 + idx * 5) * fontPx * 0.22,
+          dy: Math.cos(time * 71 + idx * 3) * fontPx * 0.05,
+          alpha: Math.floor(time * 42) % 2 ? 0.45 : 1,
+        };
+      }
+      return LOOP_NONE;
+    }
+    case "zoompunch": // keeps punching — heartbeat pulse
+      return { ...LOOP_NONE, scale: 1 + Math.max(0, Math.sin(time * 6.2)) * 0.05 };
+    case "bounce": // gentle continuing bob after the drop-in
+      return { ...LOOP_NONE, dy: Math.sin(time * 3.1 + idx * 0.7) * fontPx * 0.045 };
+    default:
+      return LOOP_NONE;
   }
 }
 
