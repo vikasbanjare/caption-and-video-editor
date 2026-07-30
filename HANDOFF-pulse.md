@@ -92,13 +92,19 @@ fixed for both Unicode forms, `updateCueText` now preserves ASR word timings on
 same-word-count edits, 115 render-engine tests cover all 111 presets, and the
 Script/Type/Color side panels are reachable below the `lg` breakpoint.
 
-1. **Verify the mobile layout visually** — the small-screen panel stacking
-   (`src/components/Editor.tsx`) was reasoned + build-tested, not
-   device-tested; load the Pages demo on a phone-width viewport and tune
-   `max-lg:max-h-[46vh]` if the monitor gets starved.
-2. **Export robustness** — `src/lib/export.ts` records via rAF, which a
-   backgrounded tab throttles to zero; add a visibility guard (warn/pause) or
-   a timer-driven draw fallback so long exports can't silently freeze.
-3. **Timeline shows the silence-cut** — `src/components/Timeline.tsx` should
-   shade `silencePlan.cuts` so "Remove silences" is visible before export
-   (plan data already exists in `src/lib/silence.ts`).
+Round 2 also landed, all three verified in a real headless Chromium driving the
+app at 390 px (upload → import SRT → silence-cut → Cut → Type → Export):
+export now survives a backgrounded tab (timer fallback + on-screen warning),
+the timeline shades the ranges the export will drop, and the stage rail no
+longer clipped Ingest/Export off a phone screen.
+
+1. **Export an actual file end-to-end** — the burn-in path is still only
+   verified by construction; drive `exportBurnIn` in headless Chromium against
+   a short clip and assert the produced blob is non-trivial and plays, so
+   "preview === export" is proven rather than asserted.
+2. **Server-side render worker (plan Phase 3)** — real-time MediaRecorder caps
+   throughput; run the same `renderFrame` headless with `node-canvas` + ffmpeg
+   so a 10-minute video doesn't take 10 minutes to export.
+3. **Whisper long-media handling** — `transcribe-browser.ts` decodes the whole
+   file into memory before chunking; a 30-minute upload will spike RAM. Stream
+   or window the decode, and surface a size warning meanwhile.

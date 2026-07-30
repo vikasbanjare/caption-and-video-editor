@@ -28,6 +28,8 @@ export interface ExportOptions {
   enhanceAudio?: boolean;
   fps?: number;
   onProgress?: (fraction: number) => void;
+  /** the tab was backgrounded mid-render (frames may stall — warn the user) */
+  onHidden?: () => void;
   signal?: AbortSignal;
 }
 
@@ -71,6 +73,7 @@ export async function exportBurnIn({
   enhanceAudio,
   fps = 30,
   onProgress,
+  onHidden,
   signal,
 }: ExportOptions): Promise<ExportResult> {
   if (!isExportSupported()) {
@@ -146,6 +149,19 @@ export async function exportBurnIn({
     audioTracks = [];
   }
 
+  // Background tabs throttle requestAnimationFrame to ~0, which would stall the
+  // draw loop while MediaRecorder keeps recording — the classic "export froze
+  // on one frame" bug. A timer fallback keeps compositing when rAF starves, and
+  // the caller is told the tab must stay visible for a clean render.
+  let hidden = typeof document !== "undefined" && document.hidden;
+  const onVisibility = () => {
+    hidden = document.hidden;
+    if (hidden) onHidden?.();
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibility);
+  }
+
   const canvasStream = canvas.captureStream(fps);
   const stream = new MediaStream([
     ...canvasStream.getVideoTracks(),
@@ -167,11 +183,21 @@ export async function exportBurnIn({
 
   // stop cleanly on demand or when we reach the end
   let rafId = 0;
+  let timerId: ReturnType<typeof setTimeout> | 0 = 0;
   let finished = false;
+  /** schedule the next draw: rAF when visible, timer when the tab is hidden */
+  const schedule = (fn: () => void) => {
+    if (hidden) timerId = setTimeout(fn, 1000 / fps);
+    else rafId = requestAnimationFrame(fn);
+  };
   const finish = () => {
     if (finished) return;
     finished = true;
     cancelAnimationFrame(rafId);
+    if (timerId) clearTimeout(timerId);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisibility);
+    }
     try {
       video.pause();
     } catch {
@@ -206,7 +232,7 @@ export async function exportBurnIn({
   const draw = () => {
     if (finished) return;
     if (seeking) {
-      rafId = requestAnimationFrame(draw);
+      schedule(draw);
       return;
     }
     if (segs) {
@@ -237,7 +263,7 @@ export async function exportBurnIn({
         return;
       }
     }
-    rafId = requestAnimationFrame(draw);
+    schedule(draw);
   };
 
   video.currentTime = segs ? segs[0].start : 0;
@@ -251,7 +277,7 @@ export async function exportBurnIn({
     throw new Error("Playback was blocked — click Export again.");
   }
   if (!segs) video.onended = finish;
-  rafId = requestAnimationFrame(draw);
+  schedule(draw);
 
   await stopped;
   if (audioCtx) await audioCtx.close().catch(() => {});

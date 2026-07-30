@@ -618,6 +618,10 @@ export default function Editor() {
         segments: silencePlanRef.current?.segments,
         enhanceAudio: enhanceAudioRef.current,
         onProgress: (f) => setExportPct(f),
+        onHidden: () =>
+          setStatus(
+            "Keep this tab visible — background tabs throttle the recorder."
+          ),
       });
       const base = (title || "pulse-captions").replace(/[^\w-]+/g, "_");
       downloadBlob(blob, `${base}.${ext}`);
@@ -1019,7 +1023,7 @@ export default function Editor() {
               </section>
             </div>
             <div className="shrink-0 border-t border-edge bg-surface/60">
-              <Timeline cues={cues} duration={effectiveDuration} selectedId={selectedId} timeRef={timeRef} playingRef={playingRef} peaks={peaks} onSelect={setSelectedId} onSeek={onSeek} onRetime={onRetime} onSplitAt={onSplitAt} onDeleteCue={onDelete} onAddAt={onAddAt} />
+              <Timeline cues={cues} duration={effectiveDuration} selectedId={selectedId} timeRef={timeRef} playingRef={playingRef} peaks={peaks} silenceCuts={silencePlan?.cuts ?? null} onSelect={setSelectedId} onSeek={onSeek} onRetime={onRetime} onSplitAt={onSplitAt} onDeleteCue={onDelete} onAddAt={onAddAt} />
             </div>
           </div>
         )}

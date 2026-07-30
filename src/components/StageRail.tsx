@@ -27,7 +27,10 @@ export default function StageRail({
   hasMedia: boolean;
 }) {
   return (
-    <nav className="flex shrink-0 items-stretch justify-center border-t border-edge bg-surface">
+    // All six stages must stay reachable at phone width (6 × 104px overflowed a
+    // 390px viewport and silently hid Ingest + Export): shrink the cells on
+    // small screens and let the rail scroll rather than clip.
+    <nav className="scroll-thin flex shrink-0 items-stretch justify-start overflow-x-auto border-t border-edge bg-surface sm:justify-center">
       {STAGES.map((s) => {
         const active = stage === s.id;
         const disabled = !hasMedia && s.id !== "ingest";
@@ -36,7 +39,7 @@ export default function StageRail({
             key={s.id}
             disabled={disabled}
             onClick={() => onChange(s.id)}
-            className={`group relative flex min-w-[104px] flex-col items-center justify-center gap-1 px-5 py-2.5 transition-colors ${
+            className={`group relative flex min-w-[60px] shrink-0 flex-col items-center justify-center gap-1 px-3 py-2.5 transition-colors sm:min-w-[104px] sm:px-5 ${
               active ? "text-ink" : "text-muted hover:text-ink"
             } disabled:pointer-events-none disabled:opacity-25`}
           >
@@ -46,7 +49,7 @@ export default function StageRail({
               }`}
             />
             <span className="font-mono text-[10px] tracking-label">{s.n}</span>
-            <span className="font-display text-[13px] font-semibold leading-none">
+            <span className="font-display text-[12px] font-semibold leading-none sm:text-[13px]">
               {s.label}
             </span>
           </button>

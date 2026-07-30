@@ -30,6 +30,8 @@ interface Props {
   timeRef: MutableRefObject<number>;
   playingRef: MutableRefObject<boolean>;
   peaks: Float32Array | null;
+  /** dead-air ranges the export will remove — shaded so the cut is visible */
+  silenceCuts?: { start: number; end: number }[] | null;
   onSelect: (id: string | null) => void;
   onSeek: (t: number) => void;
   /** commit a move/trim (one undo entry) */
@@ -69,6 +71,7 @@ export default function Timeline({
   timeRef,
   playingRef,
   peaks,
+  silenceCuts,
   onSelect,
   onSeek,
   onRetime,
@@ -551,6 +554,22 @@ export default function Timeline({
               className="absolute w-full rounded-md border border-edge/60 bg-surface2/40"
               style={{ top: CUE_TOP, height: CUE_H }}
             />
+
+            {/* silence-cut ranges: what the export will drop */}
+            {pps &&
+              (silenceCuts ?? []).map((c, i) => (
+                <div
+                  key={`cut-${i}`}
+                  className="pointer-events-none absolute z-[5] rounded-sm border border-dashed border-red-400/60 bg-red-500/15"
+                  style={{
+                    left: c.start * pps,
+                    width: Math.max(2, (c.end - c.start) * pps),
+                    top: WAVE_TOP,
+                    height: CUE_TOP + CUE_H - WAVE_TOP - 4,
+                  }}
+                  title={`Silence removed on export · ${fmtClock(c.start)}–${fmtClock(c.end)}`}
+                />
+              ))}
 
             {/* cue blocks */}
             {pps &&
