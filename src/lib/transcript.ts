@@ -14,11 +14,22 @@ const editId = () => `e${(_eid++).toString(36)}${Date.now().toString(36)}`;
 /** Minimum cue duration in seconds — prevents zero/negative-length cues. */
 export const MIN_CUE = 0.1;
 
-/** Replace a cue's text and re-distribute word timings across its span. */
+/**
+ * Replace a cue's text. When the edit keeps the word count (the common case:
+ * fixing a typo in one word), every word keeps its REAL ASR timing and only
+ * the text changes — karaoke sync survives the edit. Only when words are
+ * added/removed do timings re-distribute across the cue's span.
+ */
 export function updateCueText(cues: Cue[], id: string, text: string): Cue[] {
-  return cues.map((c) =>
-    c.id === id ? { ...c, text, words: splitWords(text, c.start, c.end) } : c
-  );
+  return cues.map((c) => {
+    if (c.id !== id) return c;
+    const tokens = text.split(/\s+/).filter(Boolean);
+    const words =
+      tokens.length === c.words.length && tokens.length > 0
+        ? c.words.map((w, i) => ({ ...w, text: tokens[i] }))
+        : splitWords(text, c.start, c.end);
+    return { ...c, text, words };
+  });
 }
 
 /**

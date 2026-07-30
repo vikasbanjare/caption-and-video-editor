@@ -7,7 +7,7 @@ name: Deploy static demo to GitHub Pages
 
 on:
   push:
-    branches: [claude/confident-galileo-o4chx1, main]
+    branches: [claude/awesome-davinci-g2h0or, main]
   workflow_dispatch:
 
 permissions:

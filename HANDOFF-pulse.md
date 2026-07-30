@@ -86,13 +86,19 @@ is a deliberately standalone artifact, not an unfinished page.
 
 ## Next 3 actions
 
-1. **Truth-sync the docs to the shipped product** — rewrite `README.md` (Pulse
-   branding, burn-in export ✅, 111 templates, correct repo story) and fix the
-   template count in `src/app/layout.tsx` metadata. The docs currently
-   contradict the app.
-2. **Delete the orphans** — remove `src/components/Toolbar.tsx` and
-   `src/components/ProjectLibrary.tsx` (superseded; keeping them invites edits
-   to dead code).
-3. **Fix the demo deploy trigger** — in `.github/workflows/pages.yml`, deploy
-   from this branch (`claude/awesome-davinci-g2h0or`) or from `main` after
-   merge, so the live demo stops tracking the abandoned sibling branch.
+Original actions 1–3 are DONE (docs truth-synced; orphans deleted; Pages
+deploys from this branch). Improvement round 1 also landed: nukta romanization
+fixed for both Unicode forms, `updateCueText` now preserves ASR word timings on
+same-word-count edits, 115 render-engine tests cover all 111 presets, and the
+Script/Type/Color side panels are reachable below the `lg` breakpoint.
+
+1. **Verify the mobile layout visually** — the small-screen panel stacking
+   (`src/components/Editor.tsx`) was reasoned + build-tested, not
+   device-tested; load the Pages demo on a phone-width viewport and tune
+   `max-lg:max-h-[46vh]` if the monitor gets starved.
+2. **Export robustness** — `src/lib/export.ts` records via rAF, which a
+   backgrounded tab throttles to zero; add a visibility guard (warn/pause) or
+   a timer-driven draw fallback so long exports can't silently freeze.
+3. **Timeline shows the silence-cut** — `src/components/Timeline.tsx` should
+   shade `silencePlan.cuts` so "Remove silences" is visible before export
+   (plan data already exists in `src/lib/silence.ts`).

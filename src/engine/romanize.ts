@@ -29,8 +29,17 @@ const CONSONANTS: Record<string, string> = {
   "प": "p", "फ": "ph", "ब": "b", "भ": "bh", "म": "m",
   "य": "y", "र": "r", "ल": "l", "व": "v", "श": "sh",
   "ष": "sh", "स": "s", "ह": "h",
-  "ड़": "r", "ढ़": "rh", "फ़": "f", "ज़": "z",
-  "क़": "q", "ग़": "gh", "ख़": "kh",
+};
+
+// Nukta (U+093C) variants — Perso-Arabic loan sounds. Input is NFC-normalized
+// first, which decomposes the precomposed letters (U+0958–095F are composition
+// exclusions), so every nukta letter arrives as base consonant + combining
+// nukta and is resolved here by lookahead. A 2-char map key can never match
+// the 1-char loop read — that's the bug this replaces.
+const NUKTA = "़";
+const NUKTA_SOUNDS: Record<string, string> = {
+  "क": "q", "ख": "kh", "ग": "gh", "ज": "z",
+  "ड": "r", "ढ": "rh", "फ": "f", "य": "y",
 };
 
 const SIGNS: Record<string, string> = {
@@ -54,6 +63,9 @@ const isDevanagari = (ch: string) => ch >= "ऀ" && ch <= "ॿ";
  * Hinglish like "ये video मस्त है" romanizes cleanly.
  */
 export function devanagariToLatin(input: string): string {
+  // NFC decomposes precomposed nukta letters (क़ ख़ ग़ ज़ ड़ ढ़ फ़ य़) to
+  // base + U+093C, so a single lookahead below covers both encodings.
+  input = input.normalize("NFC");
   let out = "";
   let i = 0;
 
@@ -67,8 +79,13 @@ export function devanagariToLatin(input: string): string {
     }
 
     if (CONSONANTS[ch]) {
-      out += CONSONANTS[ch];
       let j = i + 1;
+      if (input[j] === NUKTA) {
+        out += NUKTA_SOUNDS[ch] ?? CONSONANTS[ch];
+        j++;
+      } else {
+        out += CONSONANTS[ch];
+      }
       if (input[j] === VIRAMA) {
         // half consonant (start of a conjunct) — no vowel, let the next
         // consonant be emitted on the following pass.

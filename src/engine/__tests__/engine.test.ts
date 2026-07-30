@@ -109,6 +109,17 @@ describe("romanize (Hinglish)", () => {
   it("passes Latin/mixed content through", () => {
     expect(devanagariToLatin("ये video मस्त है")).toContain("video");
   });
+  it("handles nukta consonants in BOTH Unicode forms (z/f/r sounds)", () => {
+    // decomposed: base consonant + combining nukta U+093C
+    expect(devanagariToLatin("\u091C\u093C\u094D\u092F\u093E\u0926\u093E")).toBe("zyaadaa");
+    expect(devanagariToLatin("\u0930\u094B\u091C\u093C")).toBe("roz");
+    expect(devanagariToLatin("\u092C\u0921\u093C\u093E")).toBe("baraa");
+    expect(devanagariToLatin("\u092B\u093C\u093F\u0932\u094D\u092E")).toBe("film");
+    // precomposed single code points (U+0958\u2013095F) must romanize identically
+    expect(devanagariToLatin("\u095B\u094D\u092F\u093E\u0926\u093E")).toBe("zyaadaa");
+    expect(devanagariToLatin("\u0930\u094B\u095B")).toBe("roz");
+    expect(devanagariToLatin("\u092C\u095C\u093E")).toBe("baraa");
+  });
 });
 
 describe("presets", () => {

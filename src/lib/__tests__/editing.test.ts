@@ -7,6 +7,7 @@ import {
   mergeWithNext,
   insertCueAt,
   deleteCue,
+  updateCueText,
   MIN_CUE,
 } from "../transcript";
 import { computePeaks } from "../waveform";
@@ -20,6 +21,26 @@ function cue(id: string, start: number, end: number, words: [string, number, num
     words: words.map(([text, s, e]) => ({ text, start: s, end: e })),
   };
 }
+
+describe("updateCueText", () => {
+  it("preserves real ASR word timings when the word count is unchanged", () => {
+    const cues = [cue("a", 0, 3, [["helo", 0, 0.4], ["there", 0.4, 1.9], ["world", 1.9, 3]])];
+    const out = updateCueText(cues, "a", "hello there world");
+    expect(out[0].text).toBe("hello there world");
+    // the typo fix did NOT flatten the (uneven) real timings
+    expect(out[0].words[0]).toMatchObject({ text: "hello", start: 0, end: 0.4 });
+    expect(out[0].words[1]).toMatchObject({ text: "there", start: 0.4, end: 1.9 });
+    expect(out[0].words[2]).toMatchObject({ text: "world", start: 1.9, end: 3 });
+  });
+
+  it("re-distributes timings only when words are added or removed", () => {
+    const cues = [cue("a", 0, 3, [["one", 0, 0.2], ["two", 0.2, 3]])];
+    const out = updateCueText(cues, "a", "one two three");
+    expect(out[0].words).toHaveLength(3);
+    expect(out[0].words[0].start).toBeCloseTo(0);
+    expect(out[0].words[2].end).toBeCloseTo(3);
+  });
+});
 
 describe("retimeCue", () => {
   it("scales word timings proportionally into the new window", () => {

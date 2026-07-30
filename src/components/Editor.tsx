@@ -887,8 +887,8 @@ export default function Editor() {
         )}
 
         {stage === "script" && hasMedia && (
-          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[360px_1fr]">
-            <aside className="scroll-thin hidden min-h-0 flex-col overflow-y-auto border-r border-edge lg:flex">
+          <div className="grid h-full min-h-0 grid-cols-1 max-lg:grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[360px_1fr]">
+            <aside className="scroll-thin flex min-h-0 flex-col overflow-y-auto border-b border-edge max-lg:max-h-[46vh] lg:border-b-0 lg:border-r">
               <div className="border-b border-edge p-3">
                 <div className="aspect-video overflow-hidden rounded bg-black">{monitor}</div>
               </div>
@@ -1025,11 +1025,11 @@ export default function Editor() {
         )}
 
         {stage === "color" && hasMedia && (
-          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1fr_340px]">
+          <div className="grid h-full min-h-0 grid-cols-1 max-lg:grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[1fr_340px]">
             <section className="flex min-h-0 flex-col p-4">
               <div className="min-h-0 flex-1">{monitor}</div>
             </section>
-            <aside className="hidden min-h-0 flex-col border-l border-edge lg:flex">
+            <aside className="flex min-h-0 flex-col border-t border-edge max-lg:max-h-[46vh] lg:border-l lg:border-t-0">
               <StageHead title="Color" hint="Grade the picture — baked into export">
                 <button
                   onClick={() => setGrade(DEFAULT_GRADE)}
@@ -1071,11 +1071,11 @@ export default function Editor() {
         )}
 
         {stage === "type" && hasMedia && (
-          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1fr_360px]">
+          <div className="grid h-full min-h-0 grid-cols-1 max-lg:grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[1fr_360px]">
             <section className="flex min-h-0 flex-col p-4">
               <div className="min-h-0 flex-1">{monitor}</div>
             </section>
-            <aside className="hidden min-h-0 flex-col border-l border-edge lg:flex">
+            <aside className="flex min-h-0 flex-col border-t border-edge max-lg:max-h-[46vh] lg:border-l lg:border-t-0">
               <StageHead title="Type" hint="Drag caption on the monitor to move">
                 <button
                   onClick={resetCaptionPos}
