@@ -53,6 +53,13 @@ jobs:
 
   deploy:
     needs: build
+    # The github-pages ENVIRONMENT allows only branches on its deployment-branch
+    # policy (repo Settings → Environments), and this working branch isn't on it
+    # yet — a push-triggered deploy would be rejected before a runner starts.
+    # So: every push still BUILDS the demo (validates the static export), but
+    # publishing runs only from main, or on demand via workflow_dispatch once
+    # the branch is allowed. Skipped ≠ failed, so PR checks stay honest + green.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
