@@ -9,7 +9,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Pulse — caption NLE · by aifloh",
   description:
-    "Transcribe in the browser, cut on a real timeline, and set captions in 97 studio-grade templates. Private by default — nothing leaves your machine.",
+    "Transcribe in the browser, cut on a real timeline, and set captions in 111 studio-grade templates. Private by default — nothing leaves your machine.",
 };
 
 // Apply the saved theme before paint to avoid a flash.
