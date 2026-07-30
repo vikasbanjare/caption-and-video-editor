@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- semantic tokens (RGB channels) --------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  /* Dark — creator studio. Deep indigo-charcoal with vibrant blue-violet pop. */
+  --bg: 13 14 20;
+  --surface: 22 23 32;
+  --surface-2: 29 31 43;
+  --surface-3: 39 41 56;
+  --edge: 44 46 63;
+  --edge-2: 63 66 88;
+  --ink: 240 240 247;
+  --muted: 150 152 170;
+  /* Accent = the Pulse logo mark's own gradient (#2C57E6 → #8FB0FF) — no violet */
+  --accent: 59 107 245; /* #3B6BF5 — logo blue */
+  --accent-2: 143 176 255; /* #8FB0FF — logo light stop */
+  --shadow: 6 10 26;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  /* Light — bright, friendly, a whisper of lavender in the surfaces. */
+  --bg: 248 250 253;
+  --surface: 255 255 255;
+  --surface-2: 243 246 251;
+  --surface-3: 235 240 248;
+  --edge: 224 230 240;
+  --edge-2: 201 210 226;
+  --ink: 22 26 38;
+  --muted: 100 106 122;
+  /* Accent = the Pulse logo blue, deepened for contrast on white */
+  --accent: 44 87 230; /* #2C57E6 — logo deep blue */
+  --accent-2: 74 130 240; /* #4A82F0 — brighter logo blue */
+  --shadow: 30 44 90;
+  color-scheme: light;
+}
+
+:root {
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+}
+
+html,
+body {
+  height: 100%;
+}
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.28);
+}
+
+/* scrollbars — quiet */
+.scroll-thin::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgb(var(--edge-2));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted) / 0.6);
+  background-clip: padding-box;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 5px;
+  border-radius: 999px;
+  background: rgb(var(--edge-2));
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgb(var(--accent));
+  border: 2px solid rgb(var(--surface));
+  box-shadow: 0 2px 8px -2px rgb(var(--accent) / 0.7);
+  cursor: pointer;
+}
+
+@layer components {
+  /* Soft, rounded, friendly controls with a vibrant primary. */
+  .btn {
+    @apply inline-flex select-none items-center gap-2 rounded-full border border-edge bg-surface px-4 py-2 text-sm font-semibold text-ink/90 transition-all hover:border-edge2 hover:bg-surface2 hover:text-ink active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface;
+  }
+  .btn-primary {
+    @apply border-0 bg-grad-accent text-white shadow-glow-sm hover:-translate-y-0.5 hover:text-white hover:shadow-glow hover:brightness-105;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-surface2;
+  }
+  .select {
+    @apply w-full cursor-pointer rounded-xl border border-edge bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-edge2 focus:border-accent;
+  }
+  .card {
+    @apply rounded-2xl border border-edge bg-surface shadow-card;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-edge bg-surface px-3 py-1 text-[11px] font-semibold text-muted transition-colors;
+  }
+  .chip-active {
+    @apply border-transparent bg-grad-accent text-white shadow-glow-sm;
+  }
+  /* mono micro-label / eyebrow */
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-label text-muted;
+  }
+  .label {
+    @apply mb-1.5 block font-mono text-[10px] uppercase tracking-label text-muted;
+  }
+  .hairline {
+    @apply border-edge;
+  }
+  .rule {
+    @apply h-px w-full bg-edge;
+  }
+  /* vibrant blue→violet text for headline accents */
+  .grad-text {
+    @apply bg-grad-accent bg-clip-text text-transparent;
+  }
+}
